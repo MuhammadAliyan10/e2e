@@ -316,7 +316,15 @@ html {
   display: none;
 }
 
-/* Accessibility */
+/* Smooth transitions for sidebar state changes */
+@layer utilities {
+  .sidebar-transition {
+    transition-property: width, margin, padding;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

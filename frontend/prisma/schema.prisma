@@ -8,6 +8,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// EXISTING AUTH TABLES (NO CHANGES)
+// ============================================
+
 model User {
   id        String   @id @default(cuid())
   clerkId   String   @unique
@@ -38,9 +42,14 @@ model User {
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
 
+  // Relations
   sessions      Session[]
   auditLogs     AuditLog[]
   failedLogins  FailedLogin[]
+  workflows     Workflow[]
+  executions    Execution[]
+  sites         DiscoveredSite[]
+  apiKeys       ApiKey[]
 
   @@index([clerkId])
   @@index([email])
@@ -119,6 +128,225 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ============================================
+// NEW: WORKFLOW TABLES
+// ============================================
+
+model Workflow {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?  @db.Text
+
+  // React Flow definition
+  nodes       Json     // Array of workflow nodes
+  edges       Json     // Array of connections
+  variables   Json?    // Input variables schema
+
+  // Metadata
+  version     Int      @default(1)
+  category    WorkflowCategory?
+  tags        String[]
+
+  // Scheduling
+  schedule    String?  // Cron expression
+  timezone    String   @default("UTC")
+  isScheduled Boolean  @default(false)
+
+  // Execution config
+  timeout     Int      @default(300) // seconds
+  retryPolicy RetryPolicy @default(EXPONENTIAL)
+  maxRetries  Int      @default(3)
+
+  status      WorkflowStatus @default(DRAFT)
+
+  // Stats
+  totalRuns   Int      @default(0)
+  successRuns Int      @default(0)
+  failedRuns  Int      @default(0)
+  lastRunAt   DateTime?
+
+  publishedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  executions  Execution[]
+  triggers    WorkflowTrigger[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+  @@index([isScheduled])
+  @@index([createdAt])
+  @@map("workflows")
+}
+
+model WorkflowTrigger {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  type       TriggerType
+  config     Json     // Webhook URL, schedule, event filters
+
+  enabled    Boolean  @default(true)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([workflowId])
+  @@index([type])
+  @@index([enabled])
+  @@map("workflow_triggers")
+}
+
+model Execution {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  executionNumber Int
+  triggeredBy     TriggerSource
+  triggerMetadata Json?
+
+  status      ExecutionStatus @default(PENDING)
+  priority    JobPriority @default(NORMAL)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  duration    Int? // milliseconds
+
+  output      Json?
+  logs        Json  @default("[]")
+  screenshots String[]
+
+  error       String?
+  errorStack  String? @db.Text
+  retryCount  Int @default(0)
+
+  pageLoads   Int @default(0)
+  apiCalls    Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       ExecutionStep[]
+
+  @@unique([workflowId, executionNumber])
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+  @@index([triggeredBy])
+  @@index([createdAt])
+  @@map("executions")
+}
+
+model ExecutionStep {
+  id          String   @id @default(cuid())
+  executionId String
+  execution   Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  stepId      String
+  stepType    StepType
+  stepName    String
+
+  sequence    Int
+
+  status      StepStatus @default(PENDING)
+
+  input       Json?
+  output      Json?
+  error       String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  duration    Int?
+
+  retryCount  Int @default(0)
+
+  @@index([executionId])
+  @@index([status])
+  @@map("execution_steps")
+}
+
+// ============================================
+// NEW: SITE DISCOVERY TABLES
+// ============================================
+
+model DiscoveredSite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  url       String
+  domain    String
+  title     String?
+
+  schemaVersion Int @default(1)
+  htmlSnapshot  String? @db.Text
+  screenshot    String?
+
+  elements    Json // Interactive elements
+  navigation  Json // Sitemap/routes
+  auth        Json? // Login/signup forms
+  apis        Json? // Detected endpoints
+
+  category    SiteCategory?
+  tags        String[]
+
+  status      SchemaStatus @default(DISCOVERED)
+  lastScanned DateTime     @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, url, schemaVersion])
+  @@index([userId])
+  @@index([domain])
+  @@index([status])
+  @@index([lastScanned])
+  @@map("discovered_sites")
+}
+
+// ============================================
+// NEW: API KEYS TABLE
+// ============================================
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  keyHash   String   @unique
+  keyPrefix String
+
+  scopes    ApiScope[]
+  rateLimit Int        @default(1000)
+
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  status    ApiKeyStatus @default(ACTIVE)
+
+  @@index([userId])
+  @@index([keyHash])
+  @@index([status])
+  @@map("api_keys")
+}
+
+// ============================================
+// ENUMS (EXISTING + NEW)
+// ============================================
+
 enum AuthProvider {
   EMAIL
   GOOGLE
@@ -175,10 +403,127 @@ enum AuditAction {
   EMAIL_VERIFIED
   MFA_ENABLED
   MFA_DISABLED
+  WORKFLOW_CREATED
+  WORKFLOW_UPDATED
+  WORKFLOW_DELETED
+  WORKFLOW_EXECUTED
+  SITE_DISCOVERED
 }
 
 enum AuditResource {
   USER
   SESSION
   AUTH
+  WORKFLOW
+  EXECUTION
+  SITE
+}
+
+enum WorkflowCategory {
+  DATA_EXTRACTION
+  FORM_SUBMISSION
+  MONITORING
+  TESTING
+  INTEGRATION
+  CUSTOM
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum RetryPolicy {
+  NONE
+  LINEAR
+  EXPONENTIAL
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULE
+  WEBHOOK
+  EVENT
+}
+
+enum TriggerSource {
+  MANUAL
+  SCHEDULED
+  WEBHOOK
+  API
+  SYSTEM
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMEOUT
+}
+
+enum JobPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum StepType {
+  NAVIGATE
+  CLICK
+  FILL_FORM
+  EXTRACT
+  WAIT
+  CONDITION
+  API_CALL
+  SCRIPT
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum SiteCategory {
+  E_COMMERCE
+  SOCIAL_MEDIA
+  PRODUCTIVITY
+  FINANCE
+  EDUCATION
+  HEALTHCARE
+  GOVERNMENT
+  ENTERTAINMENT
+  NEWS
+  OTHER
+}
+
+enum SchemaStatus {
+  DISCOVERED
+  VALIDATED
+  STALE
+  FAILED
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum ApiScope {
+  WORKFLOWS_READ
+  WORKFLOWS_WRITE
+  WORKFLOWS_DELETE
+  EXECUTIONS_READ
+  EXECUTIONS_WRITE
+  SITES_READ
+  SITES_WRITE
+  ADMIN
 }

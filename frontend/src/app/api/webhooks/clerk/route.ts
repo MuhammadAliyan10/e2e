@@ -2,15 +2,42 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { WebhookEvent } from "@clerk/nextjs/server";
-import { AuthService } from "@/lib/services/auth.service";
-import { SessionService } from "@/lib/services/session.service";
+import { prisma } from "@/lib/prisma";
 import { logger, logError } from "@/lib/logger";
-import { extractAuthProvider } from "@/lib/utils/clerk.utils";
+import type { AuthProvider } from "@prisma/client";
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET!;
 
 if (!webhookSecret) {
   throw new Error("CLERK_WEBHOOK_SECRET is not set");
+}
+
+/**
+ * Normalize Clerk OAuth provider to Prisma enum
+ */
+function normalizeProvider(clerkProvider: string): AuthProvider {
+  const providerMap: Record<string, AuthProvider> = {
+    oauth_google: "GOOGLE",
+    google: "GOOGLE",
+    oauth_github: "GITHUB",
+    github: "GITHUB",
+    oauth_microsoft: "MICROSOFT",
+    microsoft: "MICROSOFT",
+    email: "EMAIL",
+    password: "EMAIL",
+  };
+
+  const normalized = providerMap[clerkProvider.toLowerCase()];
+
+  if (!normalized) {
+    logger.warn({
+      type: "unknown_webhook_provider",
+      provider: clerkProvider,
+    });
+    return "EMAIL";
+  }
+
+  return normalized;
 }
 
 export async function POST(req: Request) {
@@ -20,15 +47,6 @@ export async function POST(req: Request) {
   const svix_signature = headerPayload.get("svix-signature");
 
   if (!svix_id || !svix_timestamp || !svix_signature) {
-    logger.error({
-      type: "webhook_missing_headers",
-      headers: {
-        svix_id: !!svix_id,
-        svix_timestamp: !!svix_timestamp,
-        svix_signature: !!svix_signature,
-      },
-    });
-
     return NextResponse.json(
       { error: "Missing svix headers" },
       { status: 400 }
@@ -48,11 +66,7 @@ export async function POST(req: Request) {
       "svix-signature": svix_signature,
     }) as WebhookEvent;
   } catch (error) {
-    logError(error, {
-      type: "webhook_verification_failed",
-      svix_id,
-    });
-
+    logError(error, { type: "webhook_verification_failed" });
     return NextResponse.json(
       { error: "Webhook verification failed" },
       { status: 400 }
@@ -60,13 +74,6 @@ export async function POST(req: Request) {
   }
 
   const eventType = evt.type;
-  const eventId = (evt.data as any).id || "unknown";
-
-  logger.info({
-    type: "webhook_received",
-    eventType,
-    eventId,
-  });
 
   try {
     switch (eventType) {
@@ -80,6 +87,7 @@ export async function POST(req: Request) {
           image_url,
           external_accounts,
         } = evt.data;
+
         const primaryEmail = email_addresses.find(
           (e) => e.id === evt.data.primary_email_address_id
         );
@@ -87,22 +95,38 @@ export async function POST(req: Request) {
         if (!primaryEmail?.email_address) {
           logger.error({
             type: "webhook_missing_email",
-            eventType,
             clerkId: id,
           });
           break;
         }
 
-        const provider = extractAuthProvider(evt.data as any);
+        // Determine provider from external accounts
+        let provider: AuthProvider = "EMAIL";
+        if (external_accounts && external_accounts.length > 0) {
+          provider = normalizeProvider(external_accounts[0].provider);
+        }
 
-        await AuthService.createUser({
-          clerkId: id,
-          email: primaryEmail.email_address,
-          username: username || null,
-          firstName: first_name || null,
-          lastName: last_name || null,
-          imageUrl: image_url || null,
-          provider,
+        await prisma.user.upsert({
+          where: { clerkId: id },
+          update: {
+            email: primaryEmail.email_address,
+            username: username || null,
+            firstName: first_name || null,
+            lastName: last_name || null,
+            imageUrl: image_url || null,
+            provider,
+          },
+          create: {
+            clerkId: id,
+            email: primaryEmail.email_address,
+            username: username || null,
+            firstName: first_name || null,
+            lastName: last_name || null,
+            imageUrl: image_url || null,
+            provider,
+            status: "ACTIVE",
+            emailVerified: true,
+          },
         });
 
         logger.info({
@@ -114,87 +138,62 @@ export async function POST(req: Request) {
       }
 
       case "user.updated": {
-        const { id } = evt.data;
-        await AuthService.syncUserFromClerk(id);
+        const {
+          id,
+          email_addresses,
+          username,
+          first_name,
+          last_name,
+          image_url,
+        } = evt.data;
 
-        logger.info({
-          type: "webhook_user_updated",
-          clerkId: id,
-        });
+        const primaryEmail = email_addresses.find(
+          (e) => e.id === evt.data.primary_email_address_id
+        );
+
+        if (primaryEmail) {
+          await prisma.user.update({
+            where: { clerkId: id },
+            data: {
+              email: primaryEmail.email_address,
+              username: username || null,
+              firstName: first_name || null,
+              lastName: last_name || null,
+              imageUrl: image_url || null,
+            },
+          });
+
+          logger.info({
+            type: "webhook_user_updated",
+            clerkId: id,
+          });
+        }
         break;
       }
 
       case "user.deleted": {
         const { id } = evt.data;
 
-        if (!id) {
-          logger.error({
-            type: "webhook_missing_clerk_id",
-            eventType,
+        if (id) {
+          const user = await prisma.user.findUnique({
+            where: { clerkId: id },
+            select: { id: true },
           });
-          break;
-        }
 
-        const user = await AuthService.getUserByClerkId(id);
+          if (user) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                status: "DELETED",
+                deletedAt: new Date(),
+              },
+            });
 
-        if (user) {
-          await AuthService.softDeleteUser(user.id);
-
-          logger.info({
-            type: "webhook_user_deleted",
-            clerkId: id,
-            userId: user.id,
-          });
-        }
-        break;
-      }
-
-      case "session.created": {
-        const { user_id, id, client_id, expire_at } = evt.data;
-
-        const user = await AuthService.getUserByClerkId(user_id);
-
-        if (!user) {
-          logger.warn({
-            type: "webhook_session_user_not_found",
-            clerkId: user_id,
-          });
-          break;
-        }
-
-        const expiresAt = new Date(expire_at);
-
-        await SessionService.createSession({
-          userId: user.id,
-          clerkSessionId: id,
-          expiresAt,
-        });
-
-        logger.info({
-          type: "webhook_session_created",
-          userId: user.id,
-          clerkSessionId: id,
-        });
-        break;
-      }
-
-      case "session.ended":
-      case "session.removed":
-      case "session.revoked": {
-        const { id } = evt.data;
-
-        const session = await prisma.session.findUnique({
-          where: { clerkSessionId: id },
-        });
-
-        if (session) {
-          await SessionService.revokeSession(session.id);
-
-          logger.info({
-            type: "webhook_session_revoked",
-            clerkSessionId: id,
-            sessionId: session.id,
-          });
+            logger.info({
+              type: "webhook_user_deleted",
+              clerkId: id,
+            });
+          }
         }
         break;
       }
@@ -203,16 +202,14 @@ export async function POST(req: Request) {
         logger.warn({
           type: "webhook_unhandled_event",
           eventType,
-          eventId,
         });
     }
 
-    return NextResponse.json({ success: true, eventType }, { status: 200 });
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     logError(error, {
       type: "webhook_handler_error",
       eventType,
-      eventId,
     });
 
     return NextResponse.json(
@@ -221,6 +218,3 @@ export async function POST(req: Request) {
     );
   }
 }
-
-// Import prisma here to avoid circular dependencies
-import { prisma } from "@/lib/prisma";

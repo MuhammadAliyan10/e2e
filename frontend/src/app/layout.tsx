@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "sonner";
+import { Providers } from "./provider/QueryProvider";
 
 // Professional sans-serif for body text & UI
 const inter = Inter({
@@ -37,17 +39,20 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className="dark" suppressHydrationWarning>
-        <head>
-          <meta name="theme-color" content="#0f0f1e" />
-        </head>
-        <body
-          className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
-          suppressHydrationWarning
-        >
-          {children}
-        </body>
-      </html>
+      <Providers>
+        <html lang="en" className="dark" suppressHydrationWarning>
+          <head>
+            <meta name="theme-color" content="#0f0f1e" />
+          </head>
+          <body
+            className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
+            suppressHydrationWarning
+          >
+            {children}
+            <Toaster position="bottom-right" />
+          </body>
+        </html>
+      </Providers>
     </ClerkProvider>
   );
 }
