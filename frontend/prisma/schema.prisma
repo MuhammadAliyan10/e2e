@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  username  String?  @unique
+
+  firstName String?
+  lastName  String?
+  imageUrl  String?
+
+  provider  AuthProvider @default(EMAIL)
+  role      UserRole     @default(USER)
+  status    UserStatus   @default(ACTIVE)
+
+  plan      SubscriptionPlan @default(FREE)
+  planEndsAt DateTime?
+
+  mfaEnabled Boolean @default(false)
+  mfaSecret  String?
+
+  emailVerified Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  lastLoginAt DateTime @default(now())
+  lastLoginIp String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  failedLogins  FailedLogin[]
+
+  @@index([clerkId])
+  @@index([email])
+  @@index([username])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  clerkSessionId String   @unique
+  device         String?
+  browser        String?
+  os             String?
+  ipAddress      String?
+  country        String?
+  city           String?
+  userAgent      String?  @db.Text
+
+  status    SessionStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  lastActiveAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([clerkSessionId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model FailedLogin {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  email     String
+  ipAddress String
+  userAgent String?  @db.Text
+  reason    FailedLoginReason
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([ipAddress])
+  @@index([createdAt])
+  @@map("failed_logins")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action    AuditAction
+  resource  AuditResource
+  resourceId String?
+
+  metadata  Json?
+  ipAddress String?
+  userAgent String?  @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  GITHUB
+  MICROSOFT
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  DEVELOPER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  DELETED
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  TEAM
+  ENTERPRISE
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum FailedLoginReason {
+  INVALID_CREDENTIALS
+  ACCOUNT_SUSPENDED
+  ACCOUNT_DELETED
+  RATE_LIMITED
+  MFA_REQUIRED
+  MFA_FAILED
+}
+
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  SESSION_CREATED
+  SESSION_REVOKED
+  PASSWORD_CHANGED
+  EMAIL_VERIFIED
+  MFA_ENABLED
+  MFA_DISABLED
+}
+
+enum AuditResource {
+  USER
+  SESSION
+  AUTH
+}
