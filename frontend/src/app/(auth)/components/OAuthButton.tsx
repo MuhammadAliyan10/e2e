@@ -37,7 +37,7 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
       await handler.authenticateWithRedirect({
         strategy,
         redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/dashboard",
+        redirectUrlComplete: "/home",
       });
     } catch (error: unknown) {
       const err = error as Error;

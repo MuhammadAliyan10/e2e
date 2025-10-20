@@ -123,7 +123,7 @@ export function SignUpForm() {
       if (signUpAttempt.status === "complete") {
         await setActive({ session: signUpAttempt.createdSessionId });
         toast.success("Account created successfully!");
-        router.push("/dashboard");
+        router.push("/home");
         router.refresh();
       } else if (signUpAttempt.status === "missing_requirements") {
         // Email verification required

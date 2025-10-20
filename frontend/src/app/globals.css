@@ -59,8 +59,8 @@
   --popover: #ffffff;
   --popover-foreground: #0a0a0a;
 
-  /* Primary: #3A8DFF */
-  --primary: #3a8dff;
+  /* Primary: #FF6F5C - Vibrant coral/salmon brand color */
+  --primary: #ff6f5c;
   --primary-foreground: #ffffff;
 
   /* Secondary: #6366f1 - Professional complement */
@@ -75,11 +75,11 @@
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #3a8dff;
+  --ring: #ff6f5c;
 
   /* Chart colors */
   --chart-1: #f59e0b;
-  --chart-2: #3b82f6;
+  --chart-2: #ff6f5c;
   --chart-3: #10b981;
   --chart-4: #f97316;
   --chart-5: #8b5cf6;
@@ -87,12 +87,12 @@
   /* Sidebar colors */
   --sidebar: #ffffff;
   --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #3a8dff;
+  --sidebar-primary: #ff6f5c;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f5f9;
   --sidebar-accent-foreground: #0a0a0a;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3a8dff;
+  --sidebar-ring: #ff6f5c;
 }
 
 .dark {
@@ -104,8 +104,8 @@
   --popover: #000000;
   --popover-foreground: #ffffff;
 
-  /* Primary: Same #3A8DFF */
-  --primary: #3a8dff;
+  /* Primary: #FF6F5C - Same vibrant brand color in dark mode */
+  --primary: #ff6f5c;
   --primary-foreground: #ffffff;
 
   /* Secondary: Same #6366f1 */
@@ -120,10 +120,10 @@
   --destructive-foreground: #ffffff;
   --border: #262626;
   --input: #262626;
-  --ring: #3a8dff;
+  --ring: #ff6f5c;
 
   /* Chart colors for dark mode */
-  --chart-1: #3a8dff;
+  --chart-1: #ff6f5c;
   --chart-2: #06b6d4;
   --chart-3: #10b981;
   --chart-4: #f59e0b;
@@ -132,12 +132,12 @@
   /* Sidebar colors for dark mode */
   --sidebar: #000000;
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #3a8dff;
+  --sidebar-primary: #ff6f5c;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #171717;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #262626;
-  --sidebar-ring: #3a8dff;
+  --sidebar-ring: #ff6f5c;
 }
 
 @layer base {
@@ -181,7 +181,7 @@
   letter-spacing: -0.02em;
 }
 
-/* Custom Scrollbar - Using primary color and small size */
+/* Custom Scrollbar - Using primary color (#FF6F5C) and small size */
 ::-webkit-scrollbar {
   width: 3px;
   height: 3px;
@@ -192,14 +192,14 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--primary);
+  background: #ff6f5c;
   border-radius: 3px;
   opacity: 0.7;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   opacity: 1;
-  background: var(--primary);
+  background: #ff6f5c;
 }
 
 ::-webkit-scrollbar-corner {
@@ -209,28 +209,28 @@
 /* Firefox Scrollbar */
 html {
   scrollbar-width: thin;
-  scrollbar-color: var(--primary) transparent;
+  scrollbar-color: #ff6f5c transparent;
 }
 
 /* Firefox custom scrollbar for specific elements */
 .scrollbar-primary {
   scrollbar-width: thin;
-  scrollbar-color: var(--primary) transparent;
+  scrollbar-color: #ff6f5c transparent;
 }
 
 /* Custom scrollbar utility class for specific elements */
 .scrollbar-primary::-webkit-scrollbar-thumb {
-  background: var(--primary);
+  background: #ff6f5c;
 }
 
 /* Professional Selection */
 ::selection {
-  background: rgba(58, 141, 255, 0.15);
+  background: rgba(255, 111, 92, 0.15);
   color: inherit;
 }
 
 ::-moz-selection {
-  background: rgba(58, 141, 255, 0.15);
+  background: rgba(255, 111, 92, 0.15);
   color: inherit;
 }
 
@@ -290,7 +290,7 @@ html {
 
 .sidebar-container .scrollbar-primary::-webkit-scrollbar-thumb,
 .scrollbar-primary::-webkit-scrollbar-thumb {
-  background: var(--primary) !important;
+  background: #ff6f5c !important;
   border-radius: 3px !important;
 }
 
@@ -298,7 +298,7 @@ html {
 .sidebar-container,
 .scrollbar-primary {
   scrollbar-width: thin !important;
-  scrollbar-color: var(--primary) transparent !important;
+  scrollbar-color: #ff6f5c transparent !important;
 }
 
 /* Ensure scrollbar always shows in sidebar */
@@ -306,6 +306,7 @@ html {
 .scrollbar-primary:hover {
   overflow-y: auto;
 }
+
 .no-visible-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -418,15 +419,15 @@ html {
 }
 
 .react-flow__edge:hover marker path {
-  fill: #3b82f6 !important;
+  fill: #ff6f5c !important;
 }
 
 .react-flow__edge.selected path {
-  stroke: #3b82f6 !important;
+  stroke: #ff6f5c !important;
 }
 
 .react-flow__edge.selected marker path {
-  fill: #3b82f6 !important;
+  fill: #ff6f5c !important;
 }
 
 /* Container */

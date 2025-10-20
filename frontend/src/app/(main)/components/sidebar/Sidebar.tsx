@@ -1,201 +1,223 @@
 "use client";
 
-import { useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Tally2, Tally1 } from "lucide-react";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { useSidebar } from "@/lib/hooks/use-sidebar";
-import {
-  NAVIGATION_CONFIG,
-  BOTTOM_NAVIGATION,
-} from "@/lib/constants/navigation";
+
 import { sidebarVariants } from "@/lib/animations/sidebar-variants";
-import { SidebarSection } from "./SidebarSection";
+import { navigationConfig } from "@/lib/constants/navigation";
 import { SidebarUserButton } from "./SidebarUserButton";
-import Logo from "@/components/Global/logo/Logo";
+import { SidebarLogo } from "./SidebarLogo";
 
 export function Sidebar() {
-  const { isOpen, isMobileOpen, toggle, closeMobile } = useSidebar();
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        closeMobile();
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [closeMobile]);
+  const [collapsed, setCollapsed] = useState(false);
+  const pathname = usePathname();
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      <AnimatePresence>
-        {isMobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
-            onClick={closeMobile}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={isOpen ? "expanded" : "collapsed"}
-        variants={sidebarVariants}
-        className={cn(
-          "fixed left-0 top-0 z-50 h-screen border-r bg-background",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-          "transition-transform duration-300 ease-in-out lg:transition-none"
-        )}
-      >
-        <div className="flex h-full flex-col relative">
-          {/* Header */}
-          <div className="flex h-16 items-center justify-between border-b px-3 shrink-0">
-            <AnimatePresence mode="wait">
-              {isOpen ? (
-                <motion.div
-                  key="expanded"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="flex items-center justify-between w-full"
-                >
-                  <Link
-                    href="/dashboard"
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <Logo />
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={closeMobile}
-                    className="lg:hidden h-7 w-7"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="collapsed"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
-                  className="w-full flex justify-center"
-                >
-                  <Link
-                    href="/dashboard"
-                    className="flex items-center justify-center"
-                  >
-                    <Image
-                      src="/Logo.png"
-                      alt="e2e Logo"
-                      width={32}
-                      height={32}
-                      className="object-contain"
-                      priority
-                    />
-                  </Link>
-                </motion.div>
-              )}
-            </AnimatePresence>
+    <motion.aside
+      initial={false}
+      animate={collapsed ? "collapsed" : "expanded"}
+      variants={sidebarVariants}
+      className="relative flex h-screen flex-col border-r border-border bg-[#414244] text-foreground"
+    >
+      {/* Header with Logo and Create Button */}
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-2">
+          <div className={collapsed ? "ml-2" : "ml-0"}>
+            <SidebarLogo />
           </div>
+          {!collapsed && (
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-md font-semibold text-muted-foreground-foreground"
+            >
+              e2e
+            </motion.span>
+          )}
+        </div>
+        {!collapsed && (
+          <Button
+            size="icon"
+            className="h-6 w-6 border border-muted-foreground rounded-none bg-transparent hover:border-primary"
+          >
+            <Plus className="h-3 w-3 text-white" />
+          </Button>
+        )}
+      </div>
 
-          {/* Navigation */}
-          <ScrollArea className="flex-1 px-2 py-4">
-            <div className="space-y-4">
-              {NAVIGATION_CONFIG.map((section, index) => (
-                <div key={index}>
-                  <SidebarSection
-                    title={section.title}
-                    items={section.items}
-                    collapsible={section.collapsible}
-                    defaultOpen={section.defaultOpen}
-                    collapsed={!isOpen}
+      {/* Top Navigation */}
+      <nav className="flex-1 space-y-1 p-3 overflow-y-auto scrollbar-thin">
+        {navigationConfig.topSection.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
+
+          return (
+            <Link key={item.href} href={item.href}>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                  "hover:bg-[#535456]",
+                  collapsed && "justify-center",
+                  isActive && "text-primary"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="active-indicator"
+                    className="absolute inset-0 rounded-sm bg-[#535456] "
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
-                  {index < NAVIGATION_CONFIG.length - 1 && (
-                    <Separator className="my-4" />
+                )}
+                <Icon
+                  className={cn(
+                    "h-5 w-5 shrink-0 relative z-10",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                />
+                {!collapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className={cn(
+                      "relative z-10 text-sm font-medium",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {item.title}
+                  </motion.span>
+                )}
+              </motion.div>
+            </Link>
+          );
+        })}
+
+        {/* Projects Section */}
+        {!collapsed && (
+          <div className="pt-4">
+            <div className="px-3 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Projects
+              </span>
+            </div>
+            {navigationConfig.projectsSection.map((item) => {
+              const isActive =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const Icon = item.icon;
+
+              return (
+                <Link key={item.href} href={item.href}>
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={cn(
+                      "relative flex items-center gap-3 rounded-sm px-3 py-2.5 transition-colors",
+                      "hover:bg-[#535456]",
+                      isActive && "bg-accent/20 text-primary"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-5 w-5 shrink-0",
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        isActive ? "text-primary" : "text-muted-foreground"
+                      )}
+                    >
+                      {item.title}
+                    </span>
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </nav>
+
+      {/* Bottom Navigation */}
+      <div className="space-y-1 p-3">
+        {navigationConfig.bottomSection.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
+
+          return (
+            <Link key={item.href} href={item.href}>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                  "hover:bg-accent/10",
+                  collapsed && "justify-center",
+                  isActive && "bg-accent/20 text-primary"
+                )}
+              >
+                <div className="relative">
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 shrink-0",
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    )}
+                  />
+                  {item.badge && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
                   )}
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
-
-          {/* Collapse/Expand Button - Centered Vertically */}
-          <div className="absolute top-1/2 -right-8 -translate-y-1/2 z-10 hidden lg:block">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggle}
-              className="h-6 w-6 text-primary transition-all border-0"
-            >
-              {isOpen ? (
-                <Tally2 className="h-6 w-6" />
-              ) : (
-                <Tally1 className="h-6 w-6" />
-              )}
-            </Button>
-          </div>
-
-          {/* Bottom Navigation */}
-          <div className="border-t p-2 shrink-0">
-            <div className="space-y-1 mb-2">
-              {BOTTOM_NAVIGATION.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Button
-                    key={item.href}
-                    variant="ghost"
+                {!collapsed && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                     className={cn(
-                      "w-full justify-start gap-3 px-3 py-2 h-auto relative overflow-hidden",
-                      !isOpen && "justify-center px-2"
+                      "text-sm font-medium",
+                      isActive ? "text-primary" : "text-muted-foreground"
                     )}
-                    asChild
                   >
-                    <Link href={item.href}>
-                      <Icon
-                        className={cn("h-5 w-5 shrink-0", !isOpen && "h-6 w-6")}
-                      />
-                      <AnimatePresence mode="wait">
-                        {isOpen && (
-                          <motion.span
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -10 }}
-                            transition={{ duration: 0.15 }}
-                            className="truncate"
-                          >
-                            {item.title}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-                    </Link>
-                  </Button>
-                );
-              })}
-            </div>
-            <Separator className="my-2" />
-            <div className="lg:hidden">
-              <SidebarUserButton collapsed={!isOpen} />
-            </div>
-          </div>
-        </div>
-      </motion.aside>
-    </>
+                    {item.title}
+                  </motion.span>
+                )}
+                {!collapsed && item.expandable && (
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                )}
+              </motion.div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* User Section */}
+      <div className="border-t border-[#535456] p-3">
+        <SidebarUserButton collapsed={collapsed} />
+      </div>
+
+      {/* Toggle Button */}
+      <Button
+        onClick={() => setCollapsed(!collapsed)}
+        size="icon"
+        variant="ghost"
+        className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full border border-border bg-[#1a1a1a] hover:bg-accent/10"
+      >
+        {collapsed ? (
+          <ChevronRight className="h-3 w-3" />
+        ) : (
+          <ChevronLeft className="h-3 w-3" />
+        )}
+      </Button>
+    </motion.aside>
   );
 }

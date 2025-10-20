@@ -84,10 +84,10 @@ export function SignInForm() {
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
 
-        const redirectUrl = searchParams?.get("redirect") || "/dashboard";
+        const redirectUrl = searchParams?.get("redirect") || "/home";
         const isValidRedirect =
           redirectUrl.startsWith("/") && !redirectUrl.startsWith("//");
-        const finalRedirect = isValidRedirect ? redirectUrl : "/dashboard";
+        const finalRedirect = isValidRedirect ? redirectUrl : "/home";
 
         toast.success("Welcome back!");
         router.push(finalRedirect);

@@ -71,7 +71,7 @@ export async function saveWorkflowGraph(
       await redis.del(`workflow:${workflowId}`);
     }
 
-    revalidatePath(`/dashboard/workflows/${workflowId}/edit`);
+    revalidatePath(`/workflows/${workflowId}/edit`);
 
     return { success: true };
   } catch (error) {

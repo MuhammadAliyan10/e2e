@@ -2,18 +2,18 @@ import { Variants } from "framer-motion";
 
 export const sidebarVariants: Variants = {
   expanded: {
-    width: "16rem", // 256px
+    width: "13rem",
     transition: {
       type: "spring",
-      stiffness: 300,
+      stiffness: 350,
       damping: 30,
     },
   },
   collapsed: {
-    width: "4rem", // 64px
+    width: "4rem", // 72px
     transition: {
       type: "spring",
-      stiffness: 300,
+      stiffness: 350,
       damping: 30,
     },
   },
@@ -34,25 +34,6 @@ export const navItemVariants: Variants = {
     transition: {
       duration: 0.15,
       ease: "easeIn",
-    },
-  },
-};
-
-export const sectionVariants: Variants = {
-  open: {
-    opacity: 1,
-    height: "auto",
-    transition: {
-      duration: 0.3,
-      ease: [0.4, 0, 0.2, 1],
-    },
-  },
-  closed: {
-    opacity: 0,
-    height: 0,
-    transition: {
-      duration: 0.2,
-      ease: [0.4, 0, 0.2, 1],
     },
   },
 };

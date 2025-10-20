@@ -21,7 +21,7 @@ export default async function AuthLayout({ children }: AuthLayoutProps) {
 
   // Server-side session check
   if (userId) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   return (
