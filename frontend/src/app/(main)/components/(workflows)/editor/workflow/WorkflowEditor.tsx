@@ -43,13 +43,14 @@ import type {
 import { toast } from "sonner";
 import { TriggerNode } from "../nodes/TriggerNode";
 import { CustomEdge } from "../edges/CustomEdge";
-import { WorkflowNavbar } from "./WorkflowNavbar";
+
 import { AddNodeSheet } from "../AddNodeSheet";
 import { AiWorkflowGeneratorSheet } from "./AiWorkflowGeneratorSheet";
 import { NodeSettingsPanel } from "../NodeSettingsPanel";
 import { OpenURLNode } from "../nodes/web-automation/OpenURLNode";
-
-// Import all node components
+import { isTemporaryWorkflowId } from "@/lib/utils/workflow-id";
+import { useRouter } from "next/navigation";
+import { WorkflowNavbar } from "./WorkflowNavbar";
 
 const nodeTypes: NodeTypes = {
   trigger: TriggerNode,
@@ -72,10 +73,6 @@ function parseWorkflowNodes(nodes: any): Node[] {
       const parsed = JSON.parse(nodes);
       return Array.isArray(parsed) ? parsed : [];
     }
-    console.error(
-      "[WorkflowEditor] Nodes is not array or string:",
-      typeof nodes
-    );
     return [];
   } catch (error) {
     console.error("[WorkflowEditor] Failed to parse nodes:", error);
@@ -90,10 +87,6 @@ function parseWorkflowEdges(edges: any): DataEdge[] {
       const parsed = JSON.parse(edges);
       return Array.isArray(parsed) ? parsed : [];
     }
-    console.error(
-      "[WorkflowEditor] Edges is not array or string:",
-      typeof edges
-    );
     return [];
   } catch (error) {
     console.error("[WorkflowEditor] Failed to parse edges:", error);
@@ -105,7 +98,6 @@ async function generateAiWorkflow(config: any): Promise<{
   nodes: WorkflowNode[];
   edges: DataEdge[];
 }> {
-  console.log("[WorkflowEditor] Generating AI workflow:", config);
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const generatedNodes: WorkflowNode[] = [];
@@ -114,36 +106,11 @@ async function generateAiWorkflow(config: any): Promise<{
   const triggerNode = createNodeSafe("trigger", { x: 100, y: 100 });
   generatedNodes.push(triggerNode);
 
-  let previousNode = triggerNode;
-  let yOffset = 200;
-
-  if (config.mode === "text" && config.prompt) {
-    const aiAgentNode = createNodeSafe("aiAgent", { x: 100, y: yOffset });
-    aiAgentNode.data = {
-      ...aiAgentNode.data,
-      url: config.targetUrl,
-      prompt: config.prompt,
-      model: "gpt-4",
-      maxSteps: 10,
-    };
-    generatedNodes.push(aiAgentNode);
-
-    generatedEdges.push({
-      id: `e${previousNode.id}-${aiAgentNode.id}`,
-      source: previousNode.id,
-      target: aiAgentNode.id,
-      type: "custom",
-      animated: true,
-      markerEnd: { type: MarkerType.ArrowClosed, color: "#22c55e" },
-    });
-
-    previousNode = aiAgentNode;
-  }
-
   return { nodes: generatedNodes, edges: generatedEdges };
 }
 
 function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
+  const router = useRouter();
   const { workflow, isLoading, saveWorkflow, isSaving, lastSaved } =
     useWorkflowEditor(workflowId);
 
@@ -155,6 +122,8 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [currentWorkflowId, setCurrentWorkflowId] = useState(workflowId);
+  const [workflowName, setWorkflowName] = useState("Untitled Workflow");
 
   const reactFlowInstance = useReactFlow();
   const autoSaveTimerRef = useRef<NodeJS.Timeout>();
@@ -185,6 +154,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         }
 
         setEdges(loadedEdges);
+        setWorkflowName(workflow.name || "Untitled Workflow");
         setHasInitialized(true);
       } else {
         const triggerNode = createNodeSafe("trigger", { x: 100, y: 100 });
@@ -215,12 +185,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         setValidationErrors([]);
       }
 
-      saveWorkflow({
-        nodes: nodes as WorkflowNode[],
-        edges,
-        variables: workflow?.variables || {},
-        version: workflow?.version || 1,
-      });
+      handleAutoSave();
     }, 3000);
 
     return () => {
@@ -228,14 +193,25 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [
-    nodes,
-    edges,
-    saveWorkflow,
-    workflow?.variables,
-    workflow?.version,
-    hasInitialized,
-  ]);
+  }, [nodes, edges, hasInitialized]);
+
+  const handleAutoSave = async () => {
+    const result = await saveWorkflow({
+      nodes: nodes as WorkflowNode[],
+      edges,
+      variables: workflow?.variables || {},
+      version: workflow?.version || 1,
+    });
+
+    if (
+      result?.isNew &&
+      result?.id &&
+      isTemporaryWorkflowId(currentWorkflowId)
+    ) {
+      setCurrentWorkflowId(result.id);
+      router.replace(`/workflows/${result.id}`);
+    }
+  };
 
   const handleConnect: OnConnect = useCallback(
     (connection: Connection) => {
@@ -373,12 +349,27 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
   const handleSave = async () => {
     try {
-      await saveWorkflow({
-        nodes: nodes as WorkflowNode[],
-        edges,
-        variables: workflow?.variables || {},
-        version: workflow?.version || 1,
-      });
+      const result = await saveWorkflow(
+        {
+          nodes: nodes as WorkflowNode[],
+          edges,
+          variables: workflow?.variables || {},
+          version: workflow?.version || 1,
+        },
+        {
+          name: workflowName,
+        }
+      );
+
+      if (
+        result?.isNew &&
+        result?.id &&
+        isTemporaryWorkflowId(currentWorkflowId)
+      ) {
+        setCurrentWorkflowId(result.id);
+        router.replace(`/workflows/${result.id}`);
+      }
+
       toast.success("Workflow saved");
     } catch (error) {
       toast.error("Failed to save workflow");
@@ -400,7 +391,10 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `workflow-${workflowId}-${Date.now()}.json`;
+      a.download = `workflow-${workflowName.replace(
+        /\s+/g,
+        "-"
+      )}-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
 
@@ -440,6 +434,10 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
     toast.info("Execution started");
   };
 
+  const handleNameChange = (newName: string) => {
+    setWorkflowName(newName);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0f1419]">
@@ -454,8 +452,9 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
   return (
     <div className="flex flex-col h-screen bg-[#0f1419]">
       <WorkflowNavbar
-        workflowId={workflowId}
-        workflowName={workflow?.name || "Untitled Workflow"}
+        workflowId={currentWorkflowId}
+        workflowName={workflowName}
+        workflowStatus={workflow?.status}
         nodeCount={nodes.length}
         isSaving={isSaving}
         lastSaved={lastSaved}
@@ -463,6 +462,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         onRun={handleRun}
         onExport={handleExport}
         onImport={handleImport}
+        onNameChange={handleNameChange}
       />
 
       <div className="flex-1 relative overflow-hidden">
@@ -491,41 +491,36 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
-            size={1.5}
-            color="#475569"
-            style={{ backgroundColor: "#0f1419" }}
+            gap={8}
+            size={0.9}
+            color="#AAAAAA"
+            style={{ backgroundColor: "#2E2E2E" }}
           />
 
           <Controls className="bg-slate-800/90 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl" />
 
-          <MiniMap
-            className="bg-slate-900/90 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl"
+          {/* <MiniMap
+            className="bg-dark backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl"
             nodeColor={(node) => {
               const workflowNode = node as WorkflowNode;
               return workflowNode.data?.errors?.length ? "#ef4444" : "#3b82f6";
             }}
             maskColor="rgba(15, 20, 25, 0.8)"
-          />
+          /> */}
 
           <Panel position="top-right" className="m-4 flex flex-col gap-2">
-            <Button
+            <button
               onClick={() => setIsAddNodeOpen(true)}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg gap-2"
+              className="py-2 px-2 bg-[#2E2E2E] border border-[#3a3a3a] hover:border-primary text-white hover:text-primary"
             >
-              <Plus className="h-4 w-4" />
-              Add Node
-            </Button>
-            <Button
+              <Plus className="h-5 w-5" />
+            </button>
+            <button
               onClick={() => setIsAiGeneratorOpen(true)}
-              size="sm"
-              variant="outline"
-              className="border-purple-500 hover:bg-purple-600/20 text-white shadow-lg gap-2"
+              className="py-2 px-2 bg-[#2E2E2E] border border-[#3a3a3a] hover:border-primary text-white hover:text-primary"
             >
-              <Sparkles className="h-4 w-4" />
-              AI Generate
-            </Button>
+              <Sparkles className="h-5 w-5" />
+            </button>
           </Panel>
 
           {validationErrors.length > 0 && (

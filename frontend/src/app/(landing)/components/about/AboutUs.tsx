@@ -44,8 +44,8 @@ const AboutUs = () => {
             </p>
 
             <PointerHighlight
-              rectangleClassName="bg-primary border-blue-300 dark:border-blue-700 leading-loose"
-              pointerClassName="text-blue-500 h-3 w-3"
+              rectangleClassName="bg-primary border-primary-700 leading-loose"
+              pointerClassName="text-primary h-3 w-3"
               containerClassName="inline-block mx-1"
             >
               <Link href={"/about"} className="relative z-10 font-medium">

@@ -1,96 +1,97 @@
 import { Redis } from "ioredis";
-import { logger } from "./logger";
-
-const getRedisUrl = (): string => {
-  if (process.env.REDIS_URL) {
-    return process.env.REDIS_URL;
-  }
-
-  const host = process.env.REDIS_HOST || "localhost";
-  const port = process.env.REDIS_PORT || "6379";
-  const password = process.env.REDIS_PASSWORD;
-
-  return password
-    ? `redis://:${password}@${host}:${port}`
-    : `redis://${host}:${port}`;
-};
+import { logError, logger } from "./logger";
 
 class RedisClient {
   private client: Redis | null = null;
-  private isConnected = false;
-  private isRedisEnabled = process.env.REDIS_ENABLED !== "false";
-  private hasLoggedFailure = false;
+  private isAvailableFlag: boolean = false;
+  private connectionAttempted: boolean = false;
 
   constructor() {
-    if (!this.isRedisEnabled) {
-      logger.info({ type: "redis_disabled" });
-      return;
-    }
+    this.connect();
+  }
+
+  private connect() {
+    if (this.connectionAttempted) return;
+    this.connectionAttempted = true;
 
     try {
-      this.client = new Redis(getRedisUrl(), {
+      const redisUrl = process.env.REDIS_URL;
+
+      if (!redisUrl) {
+        logger.warn({
+          type: "redis_disabled",
+          message: "REDIS_URL not configured, running without cache",
+        });
+        return;
+      }
+
+      this.client = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
-        enableOfflineQueue: false,
-        lazyConnect: true,
         retryStrategy: (times) => {
-          // Stop retrying after 3 attempts
           if (times > 3) {
-            if (!this.hasLoggedFailure) {
-              logger.warn({
-                type: "redis_unavailable",
-                message: "Redis unavailable, running without cache",
-              });
-              this.hasLoggedFailure = true;
-            }
+            logger.warn({
+              type: "redis_connection_failed",
+              message: "Max retries reached, disabling Redis",
+            });
             return null; // Stop retrying
           }
-          return Math.min(times * 100, 1000);
+          return Math.min(times * 50, 2000);
         },
-        reconnectOnError: () => false, // Don't auto-reconnect
+        lazyConnect: true,
+        enableOfflineQueue: false,
       });
 
       this.client.on("connect", () => {
-        this.isConnected = true;
-        this.hasLoggedFailure = false;
-        logger.info({ type: "redis_connected" });
+        this.isAvailableFlag = true;
+        logger.info({
+          type: "redis_connected",
+          message: "Redis connection established",
+        });
       });
 
-      this.client.on("error", (err) => {
-        this.isConnected = false;
-        // Only log first error to avoid spam
-        if (!this.hasLoggedFailure && err.message !== "Connection is closed.") {
-          logger.error({
-            type: "redis_connection_failed",
-            error: err.message,
-          });
-          this.hasLoggedFailure = true;
+      this.client.on("error", (error) => {
+        this.isAvailableFlag = false;
+        // Only log if not ECONNREFUSED (common in dev)
+        if ((error as any).code !== "ECONNREFUSED") {
+          logError(error, { type: "redis_error" });
         }
       });
 
       this.client.on("close", () => {
-        this.isConnected = false;
+        this.isAvailableFlag = false;
+        logger.info({
+          type: "redis_disconnected",
+          message: "Redis connection closed",
+        });
       });
 
-      // Attempt initial connection (non-blocking)
-      this.client.connect().catch(() => {
-        // Silently fail - will use database fallback
+      // Attempt connection
+      this.client.connect().catch((error) => {
+        if ((error as any).code !== "ECONNREFUSED") {
+          logger.warn({
+            type: "redis_connection_failed",
+            message: "Could not connect to Redis, running without cache",
+          });
+        }
+        this.isAvailableFlag = false;
       });
     } catch (error) {
-      logger.error({
-        type: "redis_init_failed",
-        error: (error as Error).message,
-      });
+      logError(error, { type: "redis_initialization_failed" });
+      this.client = null;
+      this.isAvailableFlag = false;
     }
   }
 
-  async get(key: string): Promise<string | null> {
-    if (!this.client || !this.isConnected) {
-      return null;
-    }
+  isAvailable(): boolean {
+    return this.isAvailableFlag && this.client !== null;
+  }
 
+  async get(key: string): Promise<string | null> {
+    if (!this.isAvailable()) return null;
     try {
-      return await this.client.get(key);
-    } catch {
+      return await this.client!.get(key);
+    } catch (error) {
+      logError(error, { type: "redis_get_failed", key });
       return null;
     }
   }
@@ -98,63 +99,52 @@ class RedisClient {
   async set(
     key: string,
     value: string,
-    mode?: "EX",
+    mode?: string,
     duration?: number
-  ): Promise<boolean> {
-    if (!this.client || !this.isConnected) {
-      return false;
-    }
-
+  ): Promise<void> {
+    if (!this.isAvailable()) return;
     try {
       if (mode === "EX" && duration) {
-        await this.client.set(key, value, "EX", duration);
+        await this.client!.set(key, value, "EX", duration);
       } else {
-        await this.client.set(key, value);
+        await this.client!.set(key, value);
       }
-      return true;
-    } catch {
-      return false;
+    } catch (error) {
+      logError(error, { type: "redis_set_failed", key });
     }
   }
 
-  async del(key: string): Promise<boolean> {
-    if (!this.client || !this.isConnected) {
-      return false;
-    }
-
+  async del(key: string | string[]): Promise<void> {
+    if (!this.isAvailable()) return;
     try {
-      await this.client.del(key);
-      return true;
-    } catch {
-      return false;
+      if (Array.isArray(key)) {
+        if (key.length > 0) {
+          await this.client!.del(...key);
+        }
+      } else {
+        await this.client!.del(key);
+      }
+    } catch (error) {
+      logError(error, { type: "redis_del_failed", key });
     }
   }
 
-  isAvailable(): boolean {
-    return this.isConnected && this.client !== null;
+  async flushall(): Promise<void> {
+    if (!this.isAvailable()) return;
+    try {
+      await this.client!.flushall();
+    } catch (error) {
+      logError(error, { type: "redis_flushall_failed" });
+    }
   }
 
   async quit(): Promise<void> {
-    if (this.client && this.isConnected) {
-      try {
-        await this.client.quit();
-      } catch {
-        // Ignore quit errors
-      }
-      this.isConnected = false;
+    if (this.client) {
+      await this.client.quit();
+      this.client = null;
+      this.isAvailableFlag = false;
     }
   }
 }
 
 export const redis = new RedisClient();
-
-// Graceful shutdown
-if (process.env.NODE_ENV === "production") {
-  const shutdown = async () => {
-    await redis.quit();
-    process.exit(0);
-  };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-}

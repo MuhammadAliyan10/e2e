@@ -15,7 +15,7 @@ import { SidebarUserButton } from "./SidebarUserButton";
 import { SidebarLogo } from "./SidebarLogo";
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const pathname = usePathname();
 
   return (
@@ -66,7 +66,7 @@ export function Sidebar() {
                 whileTap={{ scale: 0.98 }}
                 className={cn(
                   "relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
-                  "hover:bg-[#535456]",
+                  "hover:bg-accent/10",
                   collapsed && "justify-center",
                   isActive && "text-primary"
                 )}
@@ -122,7 +122,7 @@ export function Sidebar() {
                     whileTap={{ scale: 0.98 }}
                     className={cn(
                       "relative flex items-center gap-3 rounded-sm px-3 py-2.5 transition-colors",
-                      "hover:bg-[#535456]",
+                      "hover:bg-accent/10",
                       isActive && "bg-accent/20 text-primary"
                     )}
                   >

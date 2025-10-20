@@ -21,9 +21,7 @@ export default async function DashboardLayout({
       <Sidebar />
 
       <main className="flex-1 overflow-y-auto !bg-[#2E2E2E] ">
-        <div className="container py-6 px-4 lg:px-8 max-w-7xl mx-auto">
-          {children}
-        </div>
+        <div>{children}</div>
       </main>
     </div>
   );

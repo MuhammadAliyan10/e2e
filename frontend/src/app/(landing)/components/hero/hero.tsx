@@ -1,120 +1,53 @@
 import React from "react";
 
 import WavyBackground from "./wavy-background";
-import { HoverBorderGradient } from "@/components/Global/ui/hover-border-gradient";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AnimatedGroup } from "@/components/tailark/animated-group";
-import { TextEffect } from "@/components/tailark/text-effect";
+
+import Image from "next/image";
+import { ContainerScroll } from "@/components/Global/ContainerScroll";
 
 const Hero = () => {
-  const transitionVariants = {
-    item: {
-      hidden: {
-        opacity: 0,
-        filter: "blur(12px)",
-        y: 12,
-      },
-      visible: {
-        opacity: 1,
-        filter: "blur(0px)",
-        y: 0,
-        transition: {
-          type: "spring" as const,
-          bounce: 0.3,
-          duration: 1.5,
-        },
-      },
-    },
-  };
-
   return (
-    <WavyBackground className="flex flex-col items-center justify-center min-h-screen">
-      <main className="overflow-hidden">
-        <section>
-          <div className="relative">
-            <div className="mx-auto max-w-7xl px-6">
-              <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-                <AnimatedGroup variants={transitionVariants}>
-                  <div className="flex justify-center text-center">
-                    <HoverBorderGradient
-                      containerClassName="rounded-full"
-                      as="button"
-                      className="bg-black  text-white flex items-center space-x-2 px-4 py-3"
-                    >
-                      <span>Intelligent Web Automation Platform</span>
-                    </HoverBorderGradient>
-                  </div>
-                </AnimatedGroup>
-
-                <TextEffect
-                  preset="fade-in-blur"
-                  speedSegment={0.3}
-                  as="h1"
-                  className="mt-4 text-balance text-6xl md:text-7xl lg:mt-10 xl:text-[5.25rem]"
-                >
-                  Automate Any Web Workflow with AI Intelligence
-                </TextEffect>
-
-                <TextEffect
-                  per="line"
-                  preset="fade-in-blur"
-                  speedSegment={0.3}
-                  delay={0.5}
-                  as="p"
-                  className="mx-auto mt-4 max-w-2xl text-balance text-lg"
-                >
-                  A revolutionary solution for automated web interactions —
-                  discover sites, execute workflows, and orchestrate tasks
-                  intelligently with AI.
-                </TextEffect>
-
-                <AnimatedGroup
-                  variants={{
-                    container: {
-                      visible: {
-                        transition: {
-                          staggerChildren: 0.05,
-                          delayChildren: 0.75,
-                        },
-                      },
-                    },
-                    ...transitionVariants,
-                  }}
-                  className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row"
-                >
-                  <div
-                    key={1}
-                    className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5"
-                  >
-                    <Button
-                      asChild
-                      size="lg"
-                      className="rounded-xl px-5 text-base"
-                    >
-                      <Link href="/signup">
-                        <span className="text-nowrap">Get Started</span>
-                      </Link>
-                    </Button>
-                  </div>
+    <>
+      <WavyBackground className="flex flex-col items-center justify-center min-h-[200vh]">
+        <section className="h-screen w-full rounded-md!overflow-visible relative flex flex-col items-center  antialiased pb-[10rem]">
+          <div className="absolute inset-0  h-full w-full items-center px-5 py-24 "></div>
+          <div className="flex flex-col mt-[-140px] md:mt-[-50px]">
+            <ContainerScroll
+              titleComponent={
+                <div className="flex items-center flex-col">
                   <Button
-                    key={2}
-                    asChild
-                    size="lg"
-                    variant="ghost"
-                    className="h-10.5 rounded-xl px-5"
+                    size={"lg"}
+                    className="p-8 mb-8 md:mb-0 text-2xl w-full sm:w-fit border-t-2 rounded-full border-[#4D4D4D] bg-[#1F1F1F] hover:bg-white group transition-all flex items-center justify-center gap-4 hover:shadow-xl hover:shadow-neutral-500 duration-500"
                   >
-                    <Link href="#features">
-                      <span className="text-nowrap">Explore Features</span>
+                    <Link
+                      href="/register"
+                      className="bg-clip-text text-transparent bg-gradient-to-r from-neutral-500 to-neutral-600  md:text-center font-sans group-hover:bg-gradient-to-r group-hover:from-black group-hover:to-black"
+                    >
+                      Start For Free Today
                     </Link>
                   </Button>
-                </AnimatedGroup>
-              </div>
-            </div>
+                  <h1 className="text-5xl md:text-8xl  bg-clip-text text-transparent bg-gradient-to-b from-white to-neutral-400 font-sans font-bold">
+                    Manage your web tasks with automation
+                  </h1>
+                </div>
+              }
+            >
+              <Image
+                src={`/Home.png`}
+                alt="hero"
+                height={720}
+                width={1400}
+                className="mx-auto rounded-2xl object-cover h-full object-fit z-20"
+                draggable={false}
+              />
+            </ContainerScroll>
           </div>
         </section>
-      </main>
-    </WavyBackground>
+      </WavyBackground>
+    </>
   );
 };
 

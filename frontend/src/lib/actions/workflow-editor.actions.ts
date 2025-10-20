@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { logError, logger } from "@/lib/logger";
 import { getCurrentUser } from "./global.actions";
+import { isTemporaryWorkflowId } from "@/lib/utils/workflow-id";
 import type { WorkflowGraph } from "@/lib/types/workflow-editor.types";
 
 interface ActionResult<T = void> {
@@ -15,18 +16,82 @@ interface ActionResult<T = void> {
 
 /**
  * Save workflow graph (nodes + edges)
+ * Handles both new (temporary ID) and existing workflows
  */
 export async function saveWorkflowGraph(
   workflowId: string,
-  graph: WorkflowGraph
-): Promise<ActionResult<void>> {
+  graph: WorkflowGraph,
+  metadata?: {
+    name?: string;
+    description?: string;
+    category?: string;
+  }
+): Promise<ActionResult<{ id: string; isNew: boolean }>> {
   try {
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    // Verify ownership
+    // Validate graph (basic checks)
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+      return { success: false, error: "Invalid graph structure" };
+    }
+
+    // Check if this is a temporary ID (new workflow)
+    if (isTemporaryWorkflowId(workflowId)) {
+      // Create new workflow
+      const workflow = await prisma.workflow.create({
+        data: {
+          userId: user.id,
+          name: metadata?.name || "Untitled Workflow",
+          description: metadata?.description || "",
+          category: (metadata?.category as any) || "GENERAL",
+          nodes: JSON.stringify(graph.nodes),
+          edges: JSON.stringify(graph.edges),
+          variables: graph.variables
+            ? JSON.stringify(graph.variables)
+            : JSON.stringify({}),
+          version: 1,
+          status: "DRAFT",
+        },
+      });
+
+      logger.info({
+        type: "workflow_created_from_editor",
+        workflowId: workflow.id,
+        userId: user.id,
+        tempId: workflowId,
+        nodeCount: graph.nodes.length,
+        edgeCount: graph.edges.length,
+      });
+
+      // Cache the new workflow
+      if (redis.isAvailable()) {
+        await redis.set(
+          `workflow:${workflow.id}`,
+          JSON.stringify({
+            nodes: graph.nodes,
+            edges: graph.edges,
+            variables: graph.variables || {},
+            version: 1,
+          }),
+          "EX",
+          300
+        );
+        await redis.del(`dashboard:stats:${user.id}`);
+      }
+
+      revalidatePath("/workflows");
+      revalidatePath("/dashboard");
+
+      return {
+        success: true,
+        data: { id: workflow.id, isNew: true },
+      };
+    }
+
+    // Verify ownership for existing workflow
     const workflow = await prisma.workflow.findFirst({
       where: {
         id: workflowId,
@@ -38,13 +103,8 @@ export async function saveWorkflowGraph(
       return { success: false, error: "Workflow not found" };
     }
 
-    // Validate graph (basic checks)
-    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
-      return { success: false, error: "Invalid graph structure" };
-    }
-
-    // Update workflow
-    await prisma.workflow.update({
+    // Update existing workflow
+    const updated = await prisma.workflow.update({
       where: { id: workflowId },
       data: {
         nodes: JSON.stringify(graph.nodes),
@@ -54,6 +114,9 @@ export async function saveWorkflowGraph(
           : undefined,
         version: { increment: 1 },
         updatedAt: new Date(),
+        ...(metadata?.name && { name: metadata.name }),
+        ...(metadata?.description && { description: metadata.description }),
+        ...(metadata?.category && { category: metadata.category as any }),
       },
     });
 
@@ -63,17 +126,32 @@ export async function saveWorkflowGraph(
       userId: user.id,
       nodeCount: graph.nodes.length,
       edgeCount: graph.edges.length,
-      version: graph.version + 1,
+      version: updated.version,
     });
 
     // Invalidate cache
     if (redis.isAvailable()) {
       await redis.del(`workflow:${workflowId}`);
+      await redis.set(
+        `workflow:${workflowId}`,
+        JSON.stringify({
+          nodes: graph.nodes,
+          edges: graph.edges,
+          variables: graph.variables || {},
+          version: updated.version,
+        }),
+        "EX",
+        300
+      );
     }
 
-    revalidatePath(`/workflows/${workflowId}/edit`);
+    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath("/workflows");
 
-    return { success: true };
+    return {
+      success: true,
+      data: { id: workflowId, isNew: false },
+    };
   } catch (error) {
     logError(error, { type: "save_workflow_graph_failed", workflowId });
     return { success: false, error: "Failed to save workflow" };
@@ -90,6 +168,19 @@ export async function loadWorkflowGraph(
     const user = await getCurrentUser();
     if (!user) {
       return { success: false, error: "Unauthorized" };
+    }
+
+    // Don't try to load temporary IDs from DB
+    if (isTemporaryWorkflowId(workflowId)) {
+      return {
+        success: true,
+        data: {
+          nodes: [],
+          edges: [],
+          variables: {},
+          version: 0,
+        },
+      };
     }
 
     // Try cache first
@@ -139,6 +230,66 @@ export async function loadWorkflowGraph(
 }
 
 /**
+ * Update workflow status (DRAFT, PUBLISHED, PAUSED, ARCHIVED)
+ */
+export async function updateWorkflowStatus(
+  workflowId: string,
+  status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED"
+): Promise<ActionResult<void>> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (isTemporaryWorkflowId(workflowId)) {
+      return { success: false, error: "Save workflow before changing status" };
+    }
+
+    const workflow = await prisma.workflow.findFirst({
+      where: {
+        id: workflowId,
+        userId: user.id,
+      },
+    });
+
+    if (!workflow) {
+      return { success: false, error: "Workflow not found" };
+    }
+
+    await prisma.workflow.update({
+      where: { id: workflowId },
+      data: {
+        status,
+        ...(status === "PUBLISHED" && { publishedAt: new Date() }),
+        ...(status === "ARCHIVED" && { archivedAt: new Date() }),
+      },
+    });
+
+    logger.info({
+      type: "workflow_status_updated",
+      workflowId,
+      userId: user.id,
+      status,
+    });
+
+    // Invalidate cache
+    if (redis.isAvailable()) {
+      await redis.del(`workflow:${workflowId}`);
+      await redis.del(`dashboard:stats:${user.id}`);
+    }
+
+    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath("/workflows");
+
+    return { success: true };
+  } catch (error) {
+    logError(error, { type: "update_workflow_status_failed", workflowId });
+    return { success: false, error: "Failed to update workflow status" };
+  }
+}
+
+/**
  * Validate workflow graph before execution
  */
 export async function validateWorkflowGraph(
@@ -163,7 +314,13 @@ export async function validateWorkflowGraph(
       errors.push("Workflow must have at least one node");
     }
 
-    // Check for disconnected nodes (except start node)
+    // Check for trigger node
+    const hasTrigger = nodes.some((node) => node.type === "trigger");
+    if (!hasTrigger) {
+      errors.push("Workflow must have a trigger node");
+    }
+
+    // Check for disconnected nodes (except trigger)
     const connectedNodes = new Set<string>();
     edges.forEach((edge) => {
       connectedNodes.add(edge.source);
@@ -171,38 +328,46 @@ export async function validateWorkflowGraph(
     });
 
     nodes.forEach((node) => {
-      if (!connectedNodes.has(node.id) && nodes.length > 1) {
+      if (
+        node.type !== "trigger" &&
+        !connectedNodes.has(node.id) &&
+        nodes.length > 1
+      ) {
         errors.push(`Node "${node.data.label}" is not connected`);
       }
     });
 
     // Check for required fields in each node
-    nodes.forEach((node) => {
-      switch (node.type) {
-        case "navigate":
-          if (!node.data.url) {
-            errors.push(`Navigate node "${node.data.label}" missing URL`);
-          }
-          break;
-        case "click":
-          if (!node.data.selector) {
-            errors.push(`Click node "${node.data.label}" missing selector`);
-          }
-          break;
-        case "extract":
-          if (node.data.extractions.length === 0) {
-            errors.push(
-              `Extract node "${node.data.label}" has no extractions configured`
-            );
-          }
-          break;
-        case "apiCall":
-          if (node.type === "apiCall" && !node.data.url) {
-            errors.push(`API node "${node.data.label}" missing URL`);
-          }
-          break;
+
+    // Check for circular dependencies (basic DFS)
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+
+    function hasCycle(nodeId: string): boolean {
+      visited.add(nodeId);
+      recursionStack.add(nodeId);
+
+      const outgoingEdges = edges.filter((e) => e.source === nodeId);
+      for (const edge of outgoingEdges) {
+        if (!visited.has(edge.target)) {
+          if (hasCycle(edge.target)) return true;
+        } else if (recursionStack.has(edge.target)) {
+          return true;
+        }
       }
-    });
+
+      recursionStack.delete(nodeId);
+      return false;
+    }
+
+    for (const node of nodes) {
+      if (!visited.has(node.id)) {
+        if (hasCycle(node.id)) {
+          errors.push("Workflow contains circular dependencies");
+          break;
+        }
+      }
+    }
 
     return {
       success: true,
