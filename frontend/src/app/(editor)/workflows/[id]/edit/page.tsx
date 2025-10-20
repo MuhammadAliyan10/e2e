@@ -1,5 +1,5 @@
-import { WorkflowEditor } from "@/app/(main)/components/(workflows)/editor/WorkflowEditor";
-import { WorkflowErrorBoundary } from "@/app/(main)/components/(workflows)/editor/WorkflowErrorBoundary";
+import { WorkflowEditor } from "@/app/(main)/components/(workflows)/editor/workflow/WorkflowEditor";
+import { WorkflowErrorBoundary } from "@/app/(main)/components/(workflows)/editor/workflow/WorkflowErrorBoundary";
 import { Metadata } from "next";
 
 import { Suspense } from "react";

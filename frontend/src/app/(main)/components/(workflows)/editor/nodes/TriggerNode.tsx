@@ -1,61 +1,56 @@
 "use client";
 
 import { memo } from "react";
-import { NodeProps } from "reactflow";
-
+import { NodeProps, Position } from "reactflow";
 import { Calendar, Webhook, Hand } from "lucide-react";
 import type { TriggerNodeData } from "@/lib/types/workflow-nodes.types";
-import { BaseNode } from "./BaseNode";
+import { BaseNode, BaseNodeConfig } from "./BaseNode";
 
 export const TriggerNode = memo((props: NodeProps<TriggerNodeData>) => {
   const { data } = props;
 
-  const getTriggerInfo = () => {
+  const getIcon = () => {
     switch (data.type) {
       case "schedule":
-        return (
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3 h-3 text-amber-400" />
-            <span className="truncate">
-              {data.schedule || "Not configured"}
-            </span>
-          </div>
-        );
+        return <Calendar className="w-5 h-5 text-amber-400" />;
       case "webhook":
-        return (
-          <div className="flex items-center gap-1.5">
-            <Webhook className="w-3 h-3 text-purple-400" />
-            <span className="truncate">
-              {data.webhookUrl
-                ? new URL(data.webhookUrl).pathname
-                : "Not configured"}
-            </span>
-          </div>
-        );
-      case "manual":
+        return <Webhook className="w-5 h-5 text-purple-400" />;
       default:
-        return (
-          <div className="flex items-center gap-1.5">
-            <Hand className="w-3 h-3 text-green-400" />
-            <span className="truncate">Manual execution</span>
-          </div>
-        );
+        return <Hand className="w-5 h-5 text-green-400" />;
     }
   };
 
-  return (
-    <BaseNode
-      {...props}
-      icon="Play"
-      iconColor="#22c55e" // Green icon
-      dotColor="#22c55e" // Green dot
-      handleColor="#22c55e" // Green handle
-      hasInputHandle={false}
-      roundedLeft={true} // Rounded left corners
-    >
-      {getTriggerInfo()}
-    </BaseNode>
-  );
+  const config: BaseNodeConfig = {
+    icon: getIcon(),
+    iconColor: "#22c55e",
+    nodeName: "Trigger Node",
+    borderRadius: "2rem 0.5rem 0.5rem 2rem", // Rounded left only
+    hasDefaultHandles: false, // Custom handles
+    handles: [
+      {
+        id: "output",
+        type: "source",
+        position: Position.Right,
+        style: { right: -7, backgroundColor: "#22c55e", borderRadius: 0 },
+        className: "!rotate-45",
+      },
+    ],
+
+    showPowerToggle: false, // Triggers can't be disabled
+    footerContent: (
+      <div className="mt-2 pt-2 border-t border-slate-700">
+        <p className="text-xs text-slate-500">
+          {data.type === "schedule"
+            ? `Schedule: ${data.schedule || "Not set"}`
+            : data.type === "webhook"
+            ? "Webhook configured"
+            : "Manual execution"}
+        </p>
+      </div>
+    ),
+  };
+
+  return <BaseNode {...props} config={config} />;
 });
 
 TriggerNode.displayName = "TriggerNode";
