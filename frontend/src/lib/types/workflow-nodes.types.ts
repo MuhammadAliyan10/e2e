@@ -1,4 +1,169 @@
-import type { Node, Edge } from "reactflow";
+import type { Node, Edge, MarkerType } from "reactflow";
+import { z } from "zod";
+
+export const ExecutionState = z.enum([
+  "idle",
+  "running",
+  "success",
+  "error",
+  "warning",
+]);
+export type ExecutionState = z.infer<typeof ExecutionState>;
+
+export const NodeHandleSchema = z.object({
+  id: z.string(),
+  type: z.enum(["source", "target"]),
+  position: z.enum(["top", "right", "bottom", "left"]),
+  connected: z.boolean().default(false),
+  dataType: z.string().optional(),
+  label: z.string().optional(),
+  required: z.boolean().default(false),
+  multiple: z.boolean().default(false),
+});
+
+export type NodeHandle = z.infer<typeof NodeHandleSchema>;
+
+export const OnClickTriggerDataSchema = z.object({
+  id: z.string(),
+  type: z.literal("trigger"),
+  label: z.string().default("OnClick Trigger"),
+  description: z.string().optional(),
+  enabled: z.boolean().default(true),
+  executionState: ExecutionState.default("idle"),
+  errors: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  lastExecutedAt: z.string().datetime().nullable().default(null),
+  executionCount: z.number().default(0),
+  metadata: z.record(z.string(), z.any()).default({}),
+  version: z.number().default(1),
+
+  // Execution control
+  debounceMs: z.number().min(0).max(10000).default(500),
+  rateLimitPerMinute: z.number().min(1).max(1000).nullable().default(null),
+  maxExecutions: z.number().min(1).nullable().default(null),
+  executeOnlyWhenEnabled: z.boolean().default(true),
+
+  // Payload configuration
+  customPayload: z.record(z.string(), z.any()).default({}),
+  outputSchema: z.record(z.string(), z.any()).optional(),
+
+  // Advanced options
+  waitForCompletion: z.boolean().default(false),
+  timeoutMs: z.number().min(1000).max(300000).default(30000),
+  logExecutions: z.boolean().default(true),
+  retryCount: z.number().min(0).max(5).default(0),
+  retryDelayMs: z.number().min(100).max(60000).default(1000),
+
+  // UI state
+  lastClickAt: z.string().datetime().nullable().default(null),
+  clickCount: z.number().default(0),
+
+  // UI callbacks (injected at runtime)
+  onTrigger: z.function().optional(),
+  onUpdate: z.function().optional(),
+  onDelete: z.function().optional(),
+  onConfigure: z.function().optional(),
+  onAddNode: z.function().optional(),
+});
+
+export type OnClickTriggerData = z.infer<typeof OnClickTriggerDataSchema>;
+
+// Enhanced OnClick Node Data (backward compatible)
+export type OnClickNodeData = {
+  label?: string;
+  description?: string;
+  debounceMs?: number;
+  rateLimitPerMinute?: number | null;
+  enabled?: boolean;
+  executionState?: "idle" | "running" | "success" | "error" | "warning";
+  errors?: string[];
+  warnings?: string[];
+  lastExecutedAt?: string;
+  executionCount?: number;
+  clickCount?: number;
+  lastClickAt?: string;
+  customPayload?: Record<string, any>;
+  maxExecutions?: number | null;
+  executeOnlyWhenEnabled?: boolean;
+  logExecutions?: boolean;
+  waitForCompletion?: boolean;
+  timeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  metadata?: Record<string, any>;
+  version?: number;
+
+  // UI integration hooks (parent/demo provides these)
+  onTrigger?: (payload: {
+    nodeId: string;
+    nodeLabel: string;
+    executionId: string;
+    timestamp: string;
+    data: Record<string, any>;
+    metadata?: Record<string, any> | null;
+  }) => Promise<void> | void;
+
+  // setData is how the node asks the parent to persist new config (UI-only, updates JSON)
+  setData?: (partial: Partial<OnClickNodeData>) => void;
+  onUpdate?: (partial: Partial<OnClickNodeData>) => void;
+  onDelete?: () => void;
+  onConfigure?: () => void;
+  onAddNode?: (sourceNodeId: string, sourceHandleId: string) => void;
+};
+
+// Node execution payload
+export const NodeExecutionPayloadSchema = z.object({
+  nodeId: z.string(),
+  nodeType: z.string(),
+  timestamp: z.string().datetime(),
+  executionId: z.string(),
+  data: z.record(z.string(), z.any()),
+  metadata: z.record(z.string(), z.any()).optional(),
+  parentExecutionId: z.string().optional(),
+  traceId: z.string().optional(),
+});
+
+export type NodeExecutionPayload = z.infer<typeof NodeExecutionPayloadSchema>;
+
+// Node execution result
+export const NodeExecutionResultSchema = z.object({
+  nodeId: z.string(),
+  executionId: z.string(),
+  status: ExecutionState,
+  data: z.record(z.string(), z.any()).optional(),
+  errors: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  executedAt: z.string().datetime(),
+  durationMs: z.number(),
+  outputData: z.record(z.string(), z.any()).optional(),
+  nextNodes: z.array(z.string()).default([]),
+});
+
+export type NodeExecutionResult = z.infer<typeof NodeExecutionResultSchema>;
+
+// Workflow execution context
+export interface WorkflowExecutionContext {
+  workflowId: string;
+  executionId: string;
+  userId: string;
+  variables: Record<string, any>;
+  metadata: Record<string, any>;
+  startedAt: string;
+  timeoutAt?: string;
+}
+
+// Enhanced workflow node with handles
+export interface EnhancedWorkflowNode<T = BaseNodeData> extends Node {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: T;
+  handles: NodeHandle[];
+  selected?: boolean;
+  dragging?: boolean;
+}
+
+export type OnClickTriggerNode = EnhancedWorkflowNode<OnClickTriggerData>;
 
 // ============ BASE TYPES ============
 export interface NodeOutput {
@@ -18,22 +183,6 @@ export interface BaseNodeData {
   outputSchema?: Record<string, any>;
   errors?: string[];
   outputs?: NodeOutput;
-}
-
-// ============ TRIGGER NODE ============
-export interface TriggerNodeData extends BaseNodeData {
-  type:
-    | "manual"
-    | "schedule"
-    | "webhook"
-    | "email"
-    | "fileUpload"
-    | "database"
-    | "message";
-  schedule?: string;
-  webhookUrl?: string;
-  enabled?: boolean;
-  lastTriggered?: string;
 }
 
 // ============ AI AGENT NODE ============
@@ -1569,7 +1718,7 @@ export type NodeType =
   | "clipboard";
 
 export type WorkflowNodeData =
-  | TriggerNodeData
+  | OnClickNodeData
   | AIAgentNodeData
   | OpenURLNodeData
   | ClickElementNodeData
@@ -1742,15 +1891,19 @@ export interface WorkflowNode extends Node {
 }
 
 export type DataEdge = Edge & {
+  type?: "custom" | "default";
   animated?: boolean;
+  markerEnd?: {
+    type: MarkerType;
+    color?: string;
+  };
   data?: {
-    payload?: any;
-    schema?: Record<string, any>;
     isDashed?: boolean;
     label?: string;
+    payload?: any;
+    onAddNode?: (sourceNodeId: string, edgeId: string) => void;
   };
 };
-
 export interface WorkflowGraph {
   nodes: WorkflowNode[];
   edges: DataEdge[];

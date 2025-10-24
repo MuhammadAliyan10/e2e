@@ -115,13 +115,6 @@ export function createNodeSafe(
       type,
       position,
       data: nodeData,
-      style: {
-        backgroundColor: NODE_BG_COLOR,
-        borderColor: EDGE_COLOR,
-        borderWidth: 2,
-        borderRadius: 12,
-        ...style,
-      },
     };
 
     console.log(

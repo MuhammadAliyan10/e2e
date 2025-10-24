@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Search, X, ChevronRight, ArrowLeft } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import {
   getAllCategories,
@@ -146,6 +146,7 @@ export function AddNodeSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetTitle></SheetTitle>
       <SheetContent
         side="right"
         className="w-[520px] p-0 flex flex-col bg-[#3a3a3a] border-l border-[#4a4a4a] overflow-hidden"
@@ -295,22 +296,19 @@ export function AddNodeSheet({
                     key={node.type}
                     onClick={() => handleSelectNode(node.type)}
                     className={cn(
-                      "w-full flex items-center gap-4 p-4 ",
+                      "w-full flex items-center gap-4 p-4  relative",
                       "hover:bg-[#4a4a4a] transition-all duration-150",
-                      "text-left group relative"
+                      "text-left group"
                     )}
                   >
-                    {/* Icon */}
-                    <div className="h-12 w-12 rounded-lg bg-[#2a2a2a] flex items-center justify-center shrink-0 border border-[#4a4a4a]">
-                      <Icon className="h-6 w-6 text-gray-300" />
-                    </div>
+                    <Icon className="h-6 w-6 text-gray-300" />
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-medium text-white mb-1 leading-tight">
+                      <p className="text-[13px] font-medium text-white mb-1 leading-tight">
                         {node.label}
                       </p>
-                      <p className="text-[13px] text-gray-400 line-clamp-2 leading-snug">
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">
                         {node.description}
                       </p>
                     </div>

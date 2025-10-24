@@ -1,27 +1,32 @@
+// components/edges/DataEdge.tsx
 "use client";
 
 import { memo } from "react";
 import {
   EdgeProps,
-  getBezierPath,
+  getStraightPath,
   EdgeLabelRenderer,
   BaseEdge,
 } from "reactflow";
 
+interface DataEdgeData {
+  label?: string;
+  onAddNode?: (sourceNodeId: string, edgeId: string) => void;
+}
+
 export const DataEdge = memo(
   ({
     id,
+
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
-    markerEnd,
     data,
-    selected,
-  }: EdgeProps) => {
-    const [edgePath, labelX, labelY] = getBezierPath({
+  }: EdgeProps<DataEdgeData>) => {
+    const [edgePath, labelX, labelY] = getStraightPath({
       sourceX,
       sourceY,
       sourcePosition,
@@ -30,52 +35,54 @@ export const DataEdge = memo(
       targetPosition,
     });
 
+    // Calculate midpoint for the circular handle
+    const midX = (sourceX + targetX) / 2;
+    const midY = (sourceY + targetY) / 2;
+
     return (
       <>
-        <defs>
-          <linearGradient
-            id={`edge-gradient-${id}`}
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="0%"
-          >
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.8" />
-          </linearGradient>
-        </defs>
-
+        {/* Main edge path */}
         <BaseEdge
           id={id}
           path={edgePath}
-          markerEnd={markerEnd}
           style={{
-            strokeWidth: selected ? 3 : 2,
-            stroke: selected ? "#3b82f6" : `url(#edge-gradient-${id})`,
-            filter: selected
-              ? "drop-shadow(0 0 4px rgba(59, 130, 246, 0.5))"
-              : "none",
+            strokeWidth: 3,
+            stroke: "#C3C9D5",
           }}
         />
 
-        {data?.payload && (
-          <EdgeLabelRenderer>
+        {/* Circular handle in the middle */}
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${midX}px, ${midY}px)`,
+              pointerEvents: "all",
+            }}
+          >
+            <div
+              className="w-5 h-5 rounded-full bg-[#C3C9D5] border-2 border-[#C3C9D5] cursor-pointer hover:scale-110 transition-transform"
+              title="Connection point"
+            />
+          </div>
+
+          {/* Optional label */}
+          {data?.label && (
             <div
               style={{
                 position: "absolute",
-                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-                pointerEvents: "all",
+                transform: `translate(-50%, -50%) translate(${labelX}px, ${
+                  labelY - 20
+                }px)`,
+                pointerEvents: "none",
               }}
-              className="nodrag nopan"
             >
-              <div className="px-2 py-1 bg-slate-800 border border-slate-600 rounded-md shadow-lg">
-                <span className="text-[9px] text-blue-400 font-medium">
-                  Data
-                </span>
+              <div className="rounded bg-[#2a2a2a] px-2 py-0.5 text-xs text-gray-400 border border-[#414244]">
+                {data.label}
               </div>
             </div>
-          </EdgeLabelRenderer>
-        )}
+          )}
+        </EdgeLabelRenderer>
       </>
     );
   }

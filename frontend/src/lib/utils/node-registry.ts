@@ -1,7 +1,6 @@
 import type {
   NodeType,
   WorkflowNodeData,
-  TriggerNodeData,
   AIAgentNodeData,
   OpenURLNodeData,
   ClickElementNodeData,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -25,7 +25,6 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { Button } from "@/components/ui/button";
 import { Plus, AlertCircle, Sparkles } from "lucide-react";
 import { useWorkflowEditor } from "@/lib/hooks/use-workflow-editor";
 import {
@@ -41,29 +40,34 @@ import type {
   WorkflowGraph,
 } from "@/lib/types/workflow-nodes.types";
 import { toast } from "sonner";
-import { TriggerNode } from "../nodes/TriggerNode";
-import { CustomEdge } from "../edges/CustomEdge";
-
+import { DataEdge as DataEdgeComponent } from "../edges/DataEdge";
 import { AddNodeSheet } from "../AddNodeSheet";
 import { AiWorkflowGeneratorSheet } from "./AiWorkflowGeneratorSheet";
 import { NodeSettingsPanel } from "../NodeSettingsPanel";
-import { OpenURLNode } from "../nodes/web-automation/OpenURLNode";
+
 import { isTemporaryWorkflowId } from "@/lib/utils/workflow-id";
 import { useRouter } from "next/navigation";
 import { WorkflowNavbar } from "./WorkflowNavbar";
+import OnClickTriggerNode from "../nodes/trigger/OnClickTriggerNode";
 
 const nodeTypes: NodeTypes = {
-  trigger: TriggerNode,
-  openURL: OpenURLNode,
+  trigger: OnClickTriggerNode,
 };
 
 const edgeTypes: EdgeTypes = {
-  default: CustomEdge,
-  custom: CustomEdge,
+  default: DataEdgeComponent,
+  custom: DataEdgeComponent,
 };
 
 interface WorkflowEditorContentProps {
   workflowId: string;
+}
+
+interface PendingEdge {
+  sourceNodeId: string;
+  sourceHandleId: string;
+  sourceX: number;
+  sourceY: number;
 }
 
 function parseWorkflowNodes(nodes: any): Node[] {
@@ -99,13 +103,10 @@ async function generateAiWorkflow(config: any): Promise<{
   edges: DataEdge[];
 }> {
   await new Promise((resolve) => setTimeout(resolve, 2000));
-
   const generatedNodes: WorkflowNode[] = [];
   const generatedEdges: DataEdge[] = [];
-
   const triggerNode = createNodeSafe("trigger", { x: 100, y: 100 });
   generatedNodes.push(triggerNode);
-
   return { nodes: generatedNodes, edges: generatedEdges };
 }
 
@@ -124,10 +125,47 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [currentWorkflowId, setCurrentWorkflowId] = useState(workflowId);
   const [workflowName, setWorkflowName] = useState("Untitled Workflow");
+  const [pendingEdge, setPendingEdge] = useState<PendingEdge | null>(null);
 
   const reactFlowInstance = useReactFlow();
   const autoSaveTimerRef = useRef<NodeJS.Timeout>();
 
+  // Stable callback - memoized to prevent re-renders
+  const handleNodeAddClick = useCallback(
+    (sourceNodeId: string, sourceHandleId: string) => {
+      const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+      setPendingEdge({
+        sourceNodeId,
+        sourceHandleId,
+        sourceX: sourceNode?.position.x || 0,
+        sourceY: sourceNode?.position.y || 0,
+      });
+      setIsAddNodeOpen(true);
+    },
+    [nodes]
+  );
+
+  // Only inject callback when nodes actually change IDs (not on every render)
+  const nodeIds = useMemo(() => nodes.map((n) => n.id).join(","), [nodes]);
+
+  useEffect(() => {
+    // Only update if callback is not already injected
+    const needsUpdate = nodes.some((node) => !node.data.onAddNode);
+
+    if (!needsUpdate) return;
+
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          onAddNode: handleNodeAddClick,
+        },
+      }))
+    );
+  }, [nodeIds, handleNodeAddClick]); // Depend on nodeIds string, not nodes array
+
+  // Initialize workflow
   useEffect(() => {
     if (hasInitialized) return;
 
@@ -167,8 +205,16 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
       setNodes([triggerNode as Node]);
       setHasInitialized(true);
     }
-  }, [workflow, setNodes, setEdges, hasInitialized]);
+  }, [
+    workflow?.nodes,
+    workflow?.edges,
+    workflow?.name,
+    hasInitialized,
+    setNodes,
+    setEdges,
+  ]);
 
+  // Auto-save with debounce
   useEffect(() => {
     if (nodes.length === 0 || !hasInitialized) return;
 
@@ -193,25 +239,37 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [nodes, edges, hasInitialized]);
+  }, [nodes.length, edges.length, hasInitialized]); // Only trigger on count changes
 
-  const handleAutoSave = async () => {
-    const result = await saveWorkflow({
-      nodes: nodes as WorkflowNode[],
-      edges,
-      variables: workflow?.variables || {},
-      version: workflow?.version || 1,
-    });
+  const handleAutoSave = useCallback(async () => {
+    try {
+      const result = await saveWorkflow({
+        nodes: nodes as WorkflowNode[],
+        edges,
+        variables: workflow?.variables || {},
+        version: workflow?.version || 1,
+      });
 
-    if (
-      result?.isNew &&
-      result?.id &&
-      isTemporaryWorkflowId(currentWorkflowId)
-    ) {
-      setCurrentWorkflowId(result.id);
-      router.replace(`/workflows/${result.id}`);
+      if (
+        result?.isNew &&
+        result?.id &&
+        isTemporaryWorkflowId(currentWorkflowId)
+      ) {
+        setCurrentWorkflowId(result.id);
+        router.replace(`/workflows/${result.id}`);
+      }
+    } catch (error) {
+      console.error("[WorkflowEditor] Auto-save failed:", error);
     }
-  };
+  }, [
+    nodes,
+    edges,
+    workflow?.variables,
+    workflow?.version,
+    currentWorkflowId,
+    saveWorkflow,
+    router,
+  ]);
 
   const handleConnect: OnConnect = useCallback(
     (connection: Connection) => {
@@ -234,14 +292,13 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         id: `e${connection.source}-${connection.target}`,
         source: connection.source,
         target: connection.target,
-        sourceHandle: connection.sourceHandle,
-        targetHandle: connection.targetHandle,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
         type: "custom",
         animated: false,
-        markerEnd: { type: MarkerType.ArrowClosed, color: "#22c55e" },
+        markerEnd: { type: MarkerType.ArrowClosed },
         data: {
-          isDashed: connection.sourceHandle?.startsWith("sub-"),
-          label: connection.sourceHandle?.replace("sub-", ""),
+          label: connection.sourceHandle || undefined,
         },
       };
 
@@ -272,10 +329,19 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
   const handleAddNode = useCallback(
     (nodeType: NodeType) => {
       try {
-        const position = reactFlowInstance.screenToFlowPosition({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-        });
+        let position: { x: number; y: number };
+
+        if (pendingEdge) {
+          position = {
+            x: pendingEdge.sourceX + 250,
+            y: pendingEdge.sourceY,
+          };
+        } else {
+          position = reactFlowInstance.screenToFlowPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          });
+        }
 
         const newNode = createNodeSafe(nodeType, {
           position,
@@ -284,16 +350,38 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
         setNodes((nds) => [...nds, newNode as Node]);
 
+        if (pendingEdge) {
+          const newEdge: DataEdge = {
+            id: `e${pendingEdge.sourceNodeId}-${newNode.id}`,
+            source: pendingEdge.sourceNodeId,
+            target: newNode.id,
+            sourceHandle: pendingEdge.sourceHandleId,
+            type: "custom",
+            animated: false,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            data: {
+              label:
+                pendingEdge.sourceHandleId !== "output"
+                  ? pendingEdge.sourceHandleId
+                  : undefined,
+            },
+          };
+
+          setEdges((eds) => [...eds, newEdge]);
+          setPendingEdge(null);
+        }
+
         setSelectedNode(newNode);
         setIsPanelOpen(true);
         setIsAddNodeOpen(false);
 
         toast.success(`${newNode.data.label} node added`);
       } catch (error) {
+        console.error("[WorkflowEditor] Failed to add node:", error);
         toast.error("Failed to add node");
       }
     },
-    [reactFlowInstance, setNodes]
+    [reactFlowInstance, setNodes, setEdges, pendingEdge]
   );
 
   const handleNodeUpdate = useCallback(
@@ -343,7 +431,8 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
       toast.success(`Generated workflow with ${generatedNodes.length} nodes`);
     } catch (error: any) {
-      throw error;
+      console.error("[WorkflowEditor] AI generation failed:", error);
+      toast.error("Failed to generate workflow");
     }
   };
 
@@ -372,6 +461,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
       toast.success("Workflow saved");
     } catch (error) {
+      console.error("[WorkflowEditor] Save failed:", error);
       toast.error("Failed to save workflow");
     }
   };
@@ -400,6 +490,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
       toast.success("Workflow exported");
     } catch (error) {
+      console.error("[WorkflowEditor] Export failed:", error);
       toast.error("Failed to export workflow");
     }
   };
@@ -418,6 +509,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
       setEdges(importedEdges);
       toast.success(`Imported ${validNodes.length} nodes`);
     } catch (error) {
+      console.error("[WorkflowEditor] Import failed:", error);
       toast.error("Failed to import workflow");
     }
   };
@@ -440,9 +532,9 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0f1419]">
+      <div className="flex h-screen items-center justify-center bg-[#2E2E2E]">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
           <p className="text-sm font-medium text-white">Loading workflow...</p>
         </div>
       </div>
@@ -450,7 +542,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#0f1419]">
+    <div className="flex h-screen flex-col bg-[#1a1a1a]">
       <WorkflowNavbar
         workflowId={currentWorkflowId}
         workflowName={workflowName}
@@ -465,7 +557,7 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
         onNameChange={handleNameChange}
       />
 
-      <div className="flex-1 relative overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -486,38 +578,43 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
           defaultEdgeOptions={{
             type: "custom",
             animated: false,
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#22c55e" },
           }}
+          proOptions={{ hideAttribution: true }}
         >
           <Background
             variant={BackgroundVariant.Dots}
-            gap={8}
-            size={0.9}
-            color="#AAAAAA"
+            gap={20}
+            size={1}
+            color="#A7A7A7"
             style={{ backgroundColor: "#2E2E2E" }}
           />
 
-          <Controls className="bg-slate-800/90 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl" />
+          <Controls className="rounded-lg border border-slate-700 bg-slate-800/90 shadow-2xl backdrop-blur-sm" />
 
-          {/* <MiniMap
-            className="bg-dark backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl"
+          <MiniMap
+            className="rounded-lg border border-slate-700 bg-slate-900/90 shadow-2xl backdrop-blur-sm"
             nodeColor={(node) => {
               const workflowNode = node as WorkflowNode;
               return workflowNode.data?.errors?.length ? "#ef4444" : "#3b82f6";
             }}
             maskColor="rgba(15, 20, 25, 0.8)"
-          /> */}
+          />
 
           <Panel position="top-right" className="m-4 flex flex-col gap-2">
             <button
-              onClick={() => setIsAddNodeOpen(true)}
-              className="py-2 px-2 bg-[#2E2E2E] border border-[#3a3a3a] hover:border-primary text-white hover:text-primary"
+              onClick={() => {
+                setPendingEdge(null);
+                setIsAddNodeOpen(true);
+              }}
+              className="border border-[#3a3a3a] bg-[#2E2E2E] px-2 py-2 text-white transition-colors hover:border-primary hover:text-primary"
+              type="button"
             >
               <Plus className="h-5 w-5" />
             </button>
             <button
               onClick={() => setIsAiGeneratorOpen(true)}
-              className="py-2 px-2 bg-[#2E2E2E] border border-[#3a3a3a] hover:border-primary text-white hover:text-primary"
+              className="border border-[#3a3a3a] bg-[#2E2E2E] px-2 py-2 text-white transition-colors hover:border-primary hover:text-primary"
+              type="button"
             >
               <Sparkles className="h-5 w-5" />
             </button>
@@ -525,14 +622,14 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
           {validationErrors.length > 0 && (
             <Panel position="bottom-left" className="m-4">
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 max-w-md">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                <div className="mb-2 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-red-400" />
                   <span className="text-sm font-semibold text-red-300">
                     Validation Issues ({validationErrors.length})
                   </span>
                 </div>
-                <ul className="text-xs text-red-300 space-y-1 list-disc list-inside">
+                <ul className="list-inside list-disc space-y-1 text-xs text-red-300">
                   {validationErrors.slice(0, 3).map((error, idx) => (
                     <li key={idx}>{error}</li>
                   ))}
@@ -545,7 +642,10 @@ function WorkflowEditorContent({ workflowId }: WorkflowEditorContentProps) {
 
       <AddNodeSheet
         open={isAddNodeOpen}
-        onOpenChange={setIsAddNodeOpen}
+        onOpenChange={(open) => {
+          setIsAddNodeOpen(open);
+          if (!open) setPendingEdge(null);
+        }}
         onSelectNode={handleAddNode}
       />
 

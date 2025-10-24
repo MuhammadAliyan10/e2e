@@ -46,7 +46,7 @@ export function WorkflowNavbar({
   workflowId,
   workflowName,
   workflowStatus = "DRAFT",
-  nodeCount,
+
   isSaving,
   lastSaved,
   onSave,
@@ -177,7 +177,7 @@ export function WorkflowNavbar({
       </div>
 
       {/* Center Section - Tabs */}
-      <div className="flex items-center gap-1 absolute left-[40%] top-[5%] z-50  bg-[#535456] px-4 py-2">
+      <div className="flex items-center gap-1 absolute left-[40%] top-[5%] z-50  bg-[#535456] px-4 py-2 rounded-sm">
         <Button
           variant="ghost"
           size="sm"
@@ -221,7 +221,7 @@ export function WorkflowNavbar({
         </div>
 
         {/* Active Toggle */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#2a2a2a]">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md ">
           <span
             className={cn(
               "text-xs font-medium",

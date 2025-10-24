@@ -2,10 +2,7 @@ import { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/actions/global.actions";
 
-import {
-  isTemporaryWorkflowId,
-  isValidWorkflowId,
-} from "@/lib/utils/workflow-id";
+import { isTemporaryWorkflowId } from "@/lib/utils/workflow-id";
 import { WorkflowEditor } from "../../components/(workflows)/editor/workflow/WorkflowEditor";
 import { getWorkflow } from "@/lib/actions/workflow.actions";
 

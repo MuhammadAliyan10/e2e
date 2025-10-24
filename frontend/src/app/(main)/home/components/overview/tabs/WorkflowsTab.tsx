@@ -258,7 +258,7 @@ export function WorkflowsTab({ userName }: WorkflowsTabProps) {
 
   const handleNewWorkflow = () => {
     const newId = generateWorkflowId();
-    router.push(`/workflows/new/${newId}`);
+    router.push(`/workflows/${newId}`);
   };
 
   if (isLoading) {
