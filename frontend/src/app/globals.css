@@ -470,3 +470,38 @@ html {
     max-width: 1536px;
   }
 }
+
+/* nprogress base override */
+#nprogress {
+  pointer-events: none;
+  z-index: 99999;
+}
+
+#nprogress .bar {
+  background: #ff6f5c; /* YouTube red */
+  position: fixed;
+  z-index: 99999;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  transform-origin: left;
+  transition: width 0.2s ease, opacity 0.4s ease;
+}
+
+/* the little "peg" for shine */
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0;
+  width: 100px;
+  height: 100%;
+  box-shadow: 0 0 10px #ff6f5c 0 0 5px #ff6f5c;
+  opacity: 1;
+  transform: rotate(3deg) translate(0px, -4px);
+}
+
+/* hide spinner */
+#nprogress .spinner {
+  display: none !important;
+}

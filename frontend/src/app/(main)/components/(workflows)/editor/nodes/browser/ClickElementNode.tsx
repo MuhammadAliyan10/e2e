@@ -1,13 +1,18 @@
-// src/app/(main)/components/(workflows)/editor/nodes/trigger/OnClickTriggerNode.tsx
+// src/app/(main)/components/(workflows)/editor/nodes/browser/ClickElementNode.tsx
 "use client";
 
 import React, { useState, useCallback } from "react";
 import { Handle, Position, NodeProps, useEdges } from "reactflow";
-import { Play, Square, Trash2, Settings } from "lucide-react";
+import {
+  Play,
+  Square,
+  Trash2,
+  Settings,
+  MousePointerClick,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { OnClickTriggerNode as OnClickTriggerNodeType } from "@/lib/types/workflow-nodes.types";
+import type { ClickElementNodeData } from "@/lib/types/workflow-nodes.types";
 
-// Output handle with connection detection
 const NodeHandle = ({
   id,
   type,
@@ -22,7 +27,10 @@ const NodeHandle = ({
   onAddNode?: () => void;
 }) => {
   const edges = useEdges();
-  const isConnected = edges.some((edge) => edge.source === nodeId);
+  const isConnected =
+    type === "source"
+      ? edges.some((edge) => edge.source === nodeId)
+      : edges.some((edge) => edge.target === nodeId);
 
   return (
     <>
@@ -31,9 +39,11 @@ const NodeHandle = ({
         position={position}
         id={id}
         className="!w-4 !h-4 !bg-[#C3C9D5] !border-0 !rounded-full"
-        style={{ right: "-8px" }}
+        style={
+          position === Position.Right ? { right: "-8px" } : { left: "-8px" }
+        }
       />
-      {!isConnected && (
+      {type === "source" && !isConnected && (
         <div className="absolute -right-[90px] top-1/2 -translate-y-1/2 flex items-center pointer-events-auto">
           <div className="w-14 h-[2px] bg-[#C3C9D5]" />
           <button
@@ -41,7 +51,7 @@ const NodeHandle = ({
               e.stopPropagation();
               onAddNode?.();
             }}
-            className="w-9 h-9 bg-[#414244] border-2 border-[#C3C9D5] rounded-sm flex items-center justify-center text-white text-xl hover:bg-[#505052] transition-colors"
+            className="w-10 h-10 bg-[#414244] border-2 border-[#C3C9D5] rounded-md flex items-center justify-center text-white text-xl hover:bg-[#505052] transition-colors"
             aria-label="Add node"
           >
             +
@@ -52,7 +62,6 @@ const NodeHandle = ({
   );
 };
 
-// Tooltip with direct actions
 const NodeTooltip = ({
   onRun,
   onToggle,
@@ -82,8 +91,8 @@ const NodeTooltip = ({
         "p-1.5 rounded text-[#919298] hover:text-white hover:bg-green-600/20 transition-colors",
         running && "opacity-50 cursor-not-allowed"
       )}
-      title="Run trigger"
-      aria-label="Run trigger"
+      title="Run"
+      aria-label="Run node"
     >
       <Play className="w-4 h-4" fill="currentColor" />
     </button>
@@ -100,7 +109,7 @@ const NodeTooltip = ({
           : "text-blue-400 hover:bg-blue-600/20"
       )}
       title={enabled ? "Disable" : "Enable"}
-      aria-label={enabled ? "Disable trigger" : "Enable trigger"}
+      aria-label={enabled ? "Disable" : "Enable"}
     >
       <Square className="w-4 h-4" />
     </button>
@@ -112,7 +121,7 @@ const NodeTooltip = ({
       }}
       className="p-1.5 rounded text-[#919298] hover:text-white hover:bg-red-600/20 transition-colors"
       title="Delete"
-      aria-label="Delete node"
+      aria-label="Delete"
     >
       <Trash2 className="w-4 h-4" />
     </button>
@@ -124,28 +133,28 @@ const NodeTooltip = ({
       }}
       className="p-1.5 rounded text-[#919298] hover:text-white hover:bg-slate-600/20 transition-colors"
       title="Settings"
-      aria-label="Open settings"
+      aria-label="Settings"
     >
       <Settings className="w-4 h-4" />
     </button>
   </div>
 );
 
-interface OnClickTriggerNodeProps extends NodeProps {
-  data: OnClickTriggerNodeType["data"] & {
-    onTrigger?: (payload: any) => Promise<void>;
-    onUpdate?: (data: Partial<OnClickTriggerNodeType["data"]>) => void;
+interface ClickElementNodeProps extends NodeProps {
+  data: ClickElementNodeData & {
+    onRun?: (nodeId: string) => Promise<void>;
+    onUpdate?: (data: Partial<ClickElementNodeData>) => void;
     onDelete?: () => void;
     onConfigure?: () => void;
     onAddNode?: (sourceNodeId: string, sourceHandleId: string) => void;
   };
 }
 
-export default function OnClickTriggerNode({
+export default function ClickElementNode({
   id,
   data,
   selected,
-}: OnClickTriggerNodeProps) {
+}: ClickElementNodeProps) {
   const [isRunning, setIsRunning] = useState(false);
 
   const handleRun = useCallback(async () => {
@@ -153,17 +162,7 @@ export default function OnClickTriggerNode({
 
     setIsRunning(true);
     try {
-      const payload = {
-        nodeId: id,
-        nodeType: "trigger",
-        timestamp: new Date().toISOString(),
-        executionId: `exec_${Date.now()}`,
-        data: { ...data.customPayload, manual: true },
-        metadata: data.metadata || {},
-      };
-
-      await data.onTrigger?.(payload);
-
+      await data.onRun?.(id);
       data.onUpdate?.({
         executionState: "success",
         lastExecutedAt: new Date().toISOString(),
@@ -176,7 +175,7 @@ export default function OnClickTriggerNode({
         executionState: "error",
         errors: [errorMessage],
       });
-      console.error(`[TriggerNode:${id}]`, error);
+      console.error(`[ClickElementNode:${id}]`, error);
     } finally {
       setIsRunning(false);
     }
@@ -209,18 +208,16 @@ export default function OnClickTriggerNode({
     <div
       className="relative w-[100px] h-[100px] bg-[#414244] cursor-pointer transition-all duration-200 group hover:shadow-lg hover:shadow-black/30"
       style={{
-        borderLeft: `3px solid ${getBorderColor()}`,
-        borderTop: `3px solid ${getBorderColor()}`,
-        borderBottom: `3px solid ${getBorderColor()}`,
-        borderRight: `3px solid ${getBorderColor()}`,
-        borderTopLeftRadius: "60px",
-        borderBottomLeftRadius: "60px",
+        border: `3px solid ${getBorderColor()}`,
+
+        borderRadius: "10px",
+
         opacity: data.enabled ? 1 : 0.5,
       }}
       role="region"
-      aria-label={`Trigger Node ${id}`}
+      aria-label={`Click Element Node ${id}`}
     >
-      {/* Hover Tooltip */}
+      {/* Tooltip */}
       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
         <NodeTooltip
           onRun={handleRun}
@@ -232,26 +229,25 @@ export default function OnClickTriggerNode({
         />
       </div>
 
-      {/* Node Content - ONLY ICON */}
+      {/* Icon */}
       <div
         className="flex items-center justify-center h-full"
         onClick={handleRun}
         role="button"
         tabIndex={0}
       >
-        <svg
-          width="50"
-          height="50"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="text-[#C3C9D5]"
-          aria-hidden="true"
-        >
-          <path d="M3 3L10.07 19.97L12.58 12.58L19.97 10.07L3 3Z" />
-        </svg>
+        <MousePointerClick className="w-12 h-12 text-[#C3C9D5]" />
       </div>
 
-      {/* Output Handle */}
+      {/* Input Handle (left) */}
+      <NodeHandle
+        id="input"
+        type="target"
+        position={Position.Left}
+        nodeId={id}
+      />
+
+      {/* Output Handle (right) */}
       <NodeHandle
         id="output"
         type="source"

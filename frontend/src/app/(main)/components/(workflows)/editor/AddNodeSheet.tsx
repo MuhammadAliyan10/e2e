@@ -1,3 +1,4 @@
+// src/app/(main)/components/(workflows)/editor/AddNodeSheet.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -9,10 +10,11 @@ import {
   searchNodes,
   type NodeCategory,
   getNodesByCategory,
+  getNodeDefinition,
 } from "@/lib/utils/node-registry";
-import { getNodeIcon } from "@/lib/utils/get-node-icon";
 import type { NodeType } from "@/lib/types/workflow-nodes.types";
 import { cn } from "@/lib/utils";
+import * as LucideIcons from "lucide-react";
 
 interface AddNodeSheetProps {
   open: boolean;
@@ -23,15 +25,15 @@ interface AddNodeSheetProps {
 // Category metadata with icons and descriptions
 const CATEGORY_META: Record<
   NodeCategory,
-  { icon: string; description: string }
+  { icon: keyof typeof LucideIcons; description: string }
 > = {
-  AI: {
-    icon: "Bot",
-    description: "Build autonomous agents, summarize or search documents, etc.",
-  },
   "Web Automation": {
     icon: "Globe",
     description: "Interact with websites, extract data, automate browsing",
+  },
+  AI: {
+    icon: "Bot",
+    description: "Build autonomous agents, summarize or search documents, etc.",
   },
   Communication: {
     icon: "Mail",
@@ -99,6 +101,18 @@ const CATEGORY_META: Record<
   },
 };
 
+// Dynamic icon renderer
+const DynamicIcon = ({
+  iconName,
+  className,
+}: {
+  iconName: string;
+  className?: string;
+}) => {
+  const Icon = (LucideIcons as any)[iconName] || LucideIcons.HelpCircle;
+  return <Icon className={className} />;
+};
+
 export function AddNodeSheet({
   open,
   onOpenChange,
@@ -138,15 +152,9 @@ export function AddNodeSheet({
     setSelectedCategory(null);
   };
 
-  const getCategoryIcon = (category: NodeCategory) => {
-    const iconName = CATEGORY_META[category]?.icon || "Package";
-    const Icon = getNodeIcon(iconName);
-    return Icon;
-  };
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetTitle></SheetTitle>
+      <SheetTitle className="sr-only">Add Node</SheetTitle>
       <SheetContent
         side="right"
         className="w-[520px] p-0 flex flex-col bg-[#3a3a3a] border-l border-[#4a4a4a] overflow-hidden"
@@ -154,7 +162,7 @@ export function AddNodeSheet({
         {/* Header */}
         <div
           className={cn(
-            " pt-4 pb-4 space-y-1 shrink-0",
+            "pt-4 pb-4 space-y-1 shrink-0",
             selectedCategory ? "px-1" : "px-4"
           )}
         >
@@ -181,14 +189,14 @@ export function AddNodeSheet({
         </div>
 
         {/* Search Bar */}
-        <div className="px-4 pb-4 shrink-0 border-b border-[#3a3a3a] ">
+        <div className="px-4 pb-4 shrink-0 border-b border-[#3a3a3a]">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
               placeholder="Search nodes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-12 pr-12 h-12 rounded-sm text-[12px] bg-[#2a2a2a] border-1 border-[#5865f2]  focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500 text-white"
+              className="pl-12 pr-12 h-12 rounded-sm text-[12px] bg-[#2a2a2a] border-1 border-primary focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500 text-white"
             />
             {search && (
               <button
@@ -207,7 +215,6 @@ export function AddNodeSheet({
           {!selectedCategory && filteredContent.type === "categories" && (
             <div className="space-y-0">
               {filteredContent.categories.map((category, index) => {
-                const Icon = getCategoryIcon(category);
                 const meta = CATEGORY_META[category];
                 const isFirst = index === 0;
 
@@ -216,19 +223,20 @@ export function AddNodeSheet({
                     key={category}
                     onClick={() => setSelectedCategory(category)}
                     className={cn(
-                      "w-full flex items-center gap-4 p-4  relative",
+                      "w-full flex items-center gap-4 p-4 relative",
                       "hover:bg-[#4a4a4a] transition-all duration-150",
                       "text-left group"
                     )}
                   >
-                    {/* Left border for first item */}
                     {isFirst && (
                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg" />
                     )}
 
-                    <Icon className="h-6 w-6 text-gray-300 shrink-0" />
+                    <DynamicIcon
+                      iconName={meta.icon}
+                      className="h-6 w-6 text-gray-300 shrink-0"
+                    />
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium text-white mb-1 leading-tight">
                         {category}
@@ -238,7 +246,6 @@ export function AddNodeSheet({
                       </p>
                     </div>
 
-                    {/* Arrow indicator */}
                     <ChevronRight className="h-5 w-5 text-gray-500 transition-opacity shrink-0" />
                   </button>
                 );
@@ -249,32 +256,31 @@ export function AddNodeSheet({
           {/* Show Nodes for Selected Category */}
           {selectedCategory && (
             <div className="space-y-0">
-              {categoryNodes.map((node) => {
-                const Icon = getNodeIcon(node.icon);
-                return (
-                  <button
-                    key={node.type}
-                    onClick={() => handleSelectNode(node.type)}
-                    className={cn(
-                      "w-full flex items-center gap-4 p-4  relative",
-                      "hover:bg-[#4a4a4a] transition-all duration-150",
-                      "text-left group"
-                    )}
-                  >
-                    <Icon className="h-6 w-6 text-gray-300 shrink-0" />
+              {categoryNodes.map((node) => (
+                <button
+                  key={node.type}
+                  onClick={() => handleSelectNode(node.type)}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 relative",
+                    "hover:bg-[#4a4a4a] transition-all duration-150",
+                    "text-left group"
+                  )}
+                >
+                  <DynamicIcon
+                    iconName={node.icon}
+                    className="h-6 w-6 text-gray-300 shrink-0"
+                  />
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-white mb-1 leading-tight">
-                        {node.label}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">
-                        {node.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white mb-1 leading-tight">
+                      {node.label}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">
+                      {node.description}
+                    </p>
+                  </div>
+                </button>
+              ))}
 
               {categoryNodes.length === 0 && (
                 <div className="text-center py-16">
@@ -289,35 +295,33 @@ export function AddNodeSheet({
           {/* Show Search Results */}
           {filteredContent.type === "nodes" && (
             <div className="space-y-0">
-              {filteredContent.nodes.map((node) => {
-                const Icon = getNodeIcon(node.icon);
-                return (
-                  <button
-                    key={node.type}
-                    onClick={() => handleSelectNode(node.type)}
-                    className={cn(
-                      "w-full flex items-center gap-4 p-4  relative",
-                      "hover:bg-[#4a4a4a] transition-all duration-150",
-                      "text-left group"
-                    )}
-                  >
-                    <Icon className="h-6 w-6 text-gray-300" />
+              {filteredContent.nodes.map((node) => (
+                <button
+                  key={node.type}
+                  onClick={() => handleSelectNode(node.type)}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 relative",
+                    "hover:bg-[#4a4a4a] transition-all duration-150",
+                    "text-left group"
+                  )}
+                >
+                  <DynamicIcon
+                    iconName={node.icon}
+                    className="h-6 w-6 text-gray-300"
+                  />
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-white mb-1 leading-tight">
-                        {node.label}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">
-                        {node.description}
-                      </p>
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white mb-1 leading-tight">
+                      {node.label}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">
+                      {node.description}
+                    </p>
+                  </div>
 
-                    {/* Arrow indicator */}
-                    <ChevronRight className="h-5 w-5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                  </button>
-                );
-              })}
+                  <ChevronRight className="h-5 w-5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </button>
+              ))}
 
               {filteredContent.nodes.length === 0 && (
                 <div className="text-center py-16">

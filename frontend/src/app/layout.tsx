@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { Providers } from "./provider/QueryProvider";
+import TopLoader from "@/components/Global/TopLoader";
 
 // Professional sans-serif for body text & UI
 const inter = Inter({
@@ -48,6 +49,7 @@ export default function RootLayout({
             className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
             suppressHydrationWarning
           >
+            <TopLoader />
             {children}
             <Toaster position="bottom-right" />
           </body>

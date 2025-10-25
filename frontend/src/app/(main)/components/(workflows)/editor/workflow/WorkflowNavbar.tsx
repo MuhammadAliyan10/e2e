@@ -1,3 +1,4 @@
+// src/app/(main)/components/(workflows)/editor/workflow/WorkflowNavbar.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,7 +9,10 @@ import {
   Check,
   MoreHorizontal,
   Share2,
-  History,
+  Undo2,
+  Redo2,
+  Download,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,19 +44,26 @@ interface WorkflowNavbarProps {
   onExport: () => void;
   onImport: (graph: WorkflowGraph) => void;
   onNameChange?: (name: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export function WorkflowNavbar({
   workflowId,
   workflowName,
   workflowStatus = "DRAFT",
-
   isSaving,
   lastSaved,
   onSave,
   onExport,
   onImport,
   onNameChange,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: WorkflowNavbarProps) {
   const router = useRouter();
   const [isActive, setIsActive] = useState(workflowStatus === "PUBLISHED");
@@ -110,7 +121,7 @@ export function WorkflowNavbar({
     }
   };
 
-  const handleImport = () => {
+  const handleImportClick = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
@@ -121,11 +132,19 @@ export function WorkflowNavbar({
       try {
         const text = await file.text();
         const graph = JSON.parse(text) as WorkflowGraph;
+
+        // Validate JSON structure
+        if (!graph.nodes || !Array.isArray(graph.nodes)) {
+          throw new Error("Invalid workflow format: missing nodes array");
+        }
+
         onImport(graph);
-        toast.success("Workflow imported successfully");
+        toast.success(`Imported ${graph.nodes.length} nodes successfully`);
       } catch (error) {
-        toast.error("Invalid workflow file");
-        console.error("Import error:", error);
+        const message =
+          error instanceof Error ? error.message : "Invalid workflow file";
+        toast.error(message);
+        console.error("[WorkflowNavbar] Import error:", error);
       }
     };
     input.click();
@@ -150,7 +169,7 @@ export function WorkflowNavbar({
           variant="ghost"
           size="icon"
           onClick={() => router.push("/dashboard/workflows")}
-          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-[#2a2a2a] shrink-0"
+          className="h-9 w-9 text-white hover:text-white hover:bg-[#535456] shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -163,48 +182,72 @@ export function WorkflowNavbar({
               onBlur={handleNameBlur}
               onKeyDown={handleNameKeyDown}
               autoFocus
-              className="h-8 max-w-[300px] bg-[#2a2a2a] border-[#3a3a3a] focus-visible:ring-1 focus-visible:ring-primary"
+              className="h-8 max-w-[300px] bg-[#535456] border-[#6a6a6c] text-white focus-visible:ring-1 focus-visible:ring-primary"
             />
           ) : (
             <button
               onClick={() => setIsEditingName(true)}
-              className="text-sm font-medium text-foreground hover:text-foreground/80 truncate max-w-[300px] text-left"
+              className="text-sm font-medium text-white hover:text-white/80 truncate max-w-[300px] text-left"
+              title={localName}
             >
-              {localName}
+              {localName || "Untitled Workflow"}
             </button>
           )}
         </div>
+
+        {/* Undo/Redo Buttons */}
       </div>
 
-      {/* Center Section - Tabs */}
-      <div className="flex items-center gap-1 absolute left-[40%] top-[5%] z-50  bg-[#535456] px-4 py-2 rounded-sm">
+      {/* Center Section - Tabs
+      <div className="flex items-center gap-1 bg-[#535456] px-2 py-1.5 rounded-md">
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-2 text-xs rounded-sm text-foreground bg-[#2a2a2a] hover:bg-[#2f2f2f]"
+          className="h-7 px-3 text-xs rounded-sm text-white bg-[#414244] hover:bg-[#4a4a4c]"
         >
           Editor
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-[#2a2a2a]"
+          className="h-7 px-3 text-xs text-[#919298] hover:text-white hover:bg-[#414244]"
         >
           Executions
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-[#2a2a2a]"
+          className="h-7 px-3 text-xs text-[#919298] hover:text-white hover:bg-[#414244]"
         >
           Evaluations
         </Button>
-      </div>
+      </div> */}
 
       {/* Right Section */}
       <div className="flex items-center gap-3 flex-1 justify-end">
-        {/* Status Indicator */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1 ml-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="h-8 w-8 text-white hover:text-white hover:bg-[#535456] disabled:opacity-30"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onRedo}
+            disabled={!canRedo}
+            className="h-8 w-8 text-white hover:text-white hover:bg-[#535456] disabled:opacity-30"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[#919298]">
           {isSaving ? (
             <>
               <Clock className="h-3 w-3 animate-spin" />
@@ -213,7 +256,7 @@ export function WorkflowNavbar({
           ) : lastSaved ? (
             <>
               <Check className="h-3 w-3 text-green-400" />
-              <span>
+              <span className="text-sx">
                 Saved {formatDistanceToNow(lastSaved, { addSuffix: true })}
               </span>
             </>
@@ -221,11 +264,11 @@ export function WorkflowNavbar({
         </div>
 
         {/* Active Toggle */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md ">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#535456]">
           <span
             className={cn(
               "text-xs font-medium",
-              isActive ? "text-foreground" : "text-muted-foreground"
+              isActive ? "text-white" : "text-[#919298]"
             )}
           >
             {isActive ? "Active" : "Inactive"}
@@ -238,12 +281,34 @@ export function WorkflowNavbar({
           />
         </div>
 
+        {/* Export Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onExport}
+          className="h-8 px-3 gap-2 bg-[#535456] border-[#6a6a6c] text-white hover:bg-[#5f5f61] hover:text-white"
+        >
+          <Download className="h-3 w-3" />
+          Export
+        </Button>
+
+        {/* Import Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleImportClick}
+          className="h-8 px-3 gap-2 bg-[#535456] border-[#6a6a6c] text-white hover:bg-[#5f5f61] hover:text-white"
+        >
+          <Upload className="h-3 w-3" />
+          Import
+        </Button>
+
         {/* Share Button */}
         <Button
           variant="outline"
           size="sm"
           onClick={handleShare}
-          className="h-8 px-3 gap-2 bg-[#2a2a2a] border-[#3a3a3a] hover:bg-[#2f2f2f]"
+          className="h-8 px-3 gap-2 bg-[#535456] border-[#6a6a6c] text-white hover:bg-[#5f5f61] hover:text-white"
         >
           <Share2 className="h-3 w-3" />
           Share
@@ -259,37 +324,38 @@ export function WorkflowNavbar({
           {isSaving ? "Saving..." : "Save"}
         </Button>
 
-        {/* History Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-[#2a2a2a]"
-          disabled={isTemporary}
-        >
-          <History className="h-4 w-4" />
-        </Button>
-
         {/* More Options */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-[#2a2a2a]"
+              className="h-8 w-8 text-white hover:text-white hover:bg-[#535456]"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={onExport}>
+          <DropdownMenuContent
+            align="end"
+            className="w-48 bg-[#2a2a2a] border-[#3a3a3a]"
+          >
+            <DropdownMenuItem
+              onClick={onExport}
+              className="text-white hover:bg-[#3a3a3a]"
+            >
+              <Download className="h-4 w-4 mr-2" />
               Export workflow
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleImport}>
+            <DropdownMenuItem
+              onClick={handleImportClick}
+              className="text-white hover:bg-[#3a3a3a]"
+            >
+              <Upload className="h-4 w-4 mr-2" />
               Import workflow
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-[#3a3a3a]" />
             <DropdownMenuItem
-              className="text-red-400 focus:text-red-400"
+              className="text-red-400 focus:text-red-400 hover:bg-[#3a3a3a]"
               disabled={isTemporary}
             >
               Delete workflow

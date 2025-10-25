@@ -1,4 +1,4 @@
-// components/edges/DataEdge.tsx
+// src/app/(main)/components/(workflows)/editor/edges/DataEdge.tsx
 "use client";
 
 import { memo } from "react";
@@ -7,67 +7,47 @@ import {
   getStraightPath,
   EdgeLabelRenderer,
   BaseEdge,
+  MarkerType,
 } from "reactflow";
 
 interface DataEdgeData {
   label?: string;
-  onAddNode?: (sourceNodeId: string, edgeId: string) => void;
 }
 
 export const DataEdge = memo(
   ({
     id,
-
     sourceX,
     sourceY,
     targetX,
     targetY,
-    sourcePosition,
-    targetPosition,
+
     data,
+    selected,
   }: EdgeProps<DataEdgeData>) => {
     const [edgePath, labelX, labelY] = getStraightPath({
       sourceX,
       sourceY,
-      sourcePosition,
       targetX,
       targetY,
-      targetPosition,
     });
-
-    // Calculate midpoint for the circular handle
-    const midX = (sourceX + targetX) / 2;
-    const midY = (sourceY + targetY) / 2;
 
     return (
       <>
-        {/* Main edge path */}
+        {/* Main edge path with arrow */}
         <BaseEdge
           id={id}
           path={edgePath}
+          markerEnd={MarkerType.ArrowClosed}
           style={{
-            strokeWidth: 3,
-            stroke: "#C3C9D5",
+            strokeWidth: selected ? 3 : 2.5,
+            stroke: selected ? "#3b82f6" : "#C3C9D5",
           }}
         />
 
-        {/* Circular handle in the middle */}
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: "absolute",
-              transform: `translate(-50%, -50%) translate(${midX}px, ${midY}px)`,
-              pointerEvents: "all",
-            }}
-          >
-            <div
-              className="w-5 h-5 rounded-full bg-[#C3C9D5] border-2 border-[#C3C9D5] cursor-pointer hover:scale-110 transition-transform"
-              title="Connection point"
-            />
-          </div>
-
-          {/* Optional label */}
-          {data?.label && (
+        {/* Optional label */}
+        {data?.label && (
+          <EdgeLabelRenderer>
             <div
               style={{
                 position: "absolute",
@@ -81,8 +61,8 @@ export const DataEdge = memo(
                 {data.label}
               </div>
             </div>
-          )}
-        </EdgeLabelRenderer>
+          </EdgeLabelRenderer>
+        )}
       </>
     );
   }

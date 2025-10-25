@@ -210,7 +210,7 @@ export function Sidebar() {
         onClick={() => setCollapsed(!collapsed)}
         size="icon"
         variant="ghost"
-        className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full border border-border bg-[#1a1a1a] hover:bg-accent/10"
+        className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full border border-border bg-[#414244] hover:bg-accent/10 z-50"
       >
         {collapsed ? (
           <ChevronRight className="h-3 w-3" />
